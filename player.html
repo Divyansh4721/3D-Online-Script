@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MovieBox Premium — Private Collection</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #050505;
+        }
+
+        .luxury-heading {
+            font-family: 'Cormorant Garamond', serif;
+        }
+    </style>
+</head>
+
+<body
+    class="text-zinc-200 min-h-screen selection:bg-amber-500/30 selection:text-amber-200 flex flex-col justify-between overflow-x-hidden">
+    <div>
+        <!-- Premium Header Area -->
+        <header
+            class="border-b border-zinc-900 bg-[#0d0d0d]/80 backdrop-blur-xl sticky top-0 z-50 px-4 sm:px-6 lg:px-8">
+            <div
+                class="max-w-7xl mx-auto py-5 sm:py-6 flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
+                <!-- Luxury Branding Block -->
+                <div class="flex items-center gap-4 text-center sm:text-left">
+                    <div
+                        class="h-12 w-12 rounded-xl bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700 flex items-center justify-center font-bold text-black text-xl shadow-2xl shadow-amber-500/10 tracking-tighter luxury-heading">
+                        MB
+                    </div>
+                    <div>
+                        <h1
+                            class="luxury-heading text-2xl font-medium tracking-widest bg-gradient-to-b from-zinc-100 to-zinc-400 bg-clip-text text-transparent uppercase">
+                            MovieBox
+                        </h1>
+                        <p class="text-[10px] tracking-[0.3em] text-amber-500/60 uppercase font-semibold">
+                            Curated by Divyansh
+                        </p>
+                    </div>
+                </div>
+                <!-- Back to Vault Controller Trigger -->
+                <div class="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-end">
+                    <a href="index.html"
+                        class="flex items-center gap-2 text-sm font-medium text-zinc-400 hover:text-amber-400 transition-colors group px-4 py-2 rounded-xl border border-zinc-900 bg-[#121212] shadow-md focus:outline-none focus:ring-1 focus:ring-amber-500/40">
+                        <svg class="h-4 w-4 transform group-hover:-translate-x-1 transition-transform" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                        </svg>
+                        <span>Return to Vault</span>
+                    </a>
+                </div>
+            </div>
+        </header>
+        <!-- Main Media Detail Display Area -->
+        <main class="max-w-4xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-12 flex flex-col items-center justify-center">
+            <!-- Premium Theater Showcase Card -->
+            <div
+                class="w-full bg-[#0d0d0d] border border-zinc-900 rounded-3xl p-8 md:p-12 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.9)] relative overflow-hidden backdrop-blur-sm">
+                <!-- Geometric Gold Ambient Edge Accent -->
+                <div
+                    class="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-[1px] bg-gradient-to-r from-transparent via-amber-500/40 to-transparent">
+                </div>
+                <div class="flex flex-col items-center text-center gap-6 sm:gap-8">
+                    <!-- Artwork Thumbnail Area -->
+                    <div class="relative h-64 w-44 sm:h-72 sm:w-48 bg-[#050505] rounded-2xl overflow-hidden border border-zinc-800 shadow-2xl hidden transition-all duration-500"
+                        id="posterContainer">
+                        <img id="moviePoster" src="" alt="Movie Thumbnail" class="w-full h-full object-cover">
+                    </div>
+                    <!-- System Fallback Icon Frame -->
+                    <div id="fallbackIcon"
+                        class="h-20 w-120 bg-amber-500/5 text-amber-400 border border-amber-500/10 rounded-2xl flex items-center justify-center shadow-inner">
+                        <svg class="w-10 h-10 stroke-light" fill="none" stroke="currentColor" stroke-width="1.25"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+                        </svg>
+                    </div>
+                    <!-- Main Text Blocks -->
+                    <div class="w-full space-y-4">
+                        <h1 id="movieTitle"
+                            class="luxury-heading text-3xl sm:text-4xl md:text-5xl font-medium tracking-wide text-transparent bg-clip-text bg-gradient-to-b from-zinc-100 via-zinc-300 to-zinc-500 drop-shadow-sm">
+                            Searching Movie Specifications...
+                        </h1>
+                        <!-- Inline Clean Runtime Duration Badge -->
+                        <div id="metadataContainer" class="hidden pt-1">
+                            <span id="fileDuration"
+                                class="text-xs uppercase tracking-[0.2em] font-bold text-amber-400 bg-amber-500/5 px-4 py-1.5 rounded border border-amber-500/20 inline-block backdrop-blur-sm">
+                                -
+                            </span>
+                        </div>
+                        <div
+                            class="w-16 h-[1px] bg-gradient-to-r from-transparent via-zinc-800 to-transparent mx-auto pt-2">
+                        </div>
+                        <!-- Direct Google Drive Access Action Point (Large Spatial Tap Target) -->
+                        <div id="downloadAction" class="w-full max-w-xs sm:max-w-sm pt-2 hidden mx-auto">
+                            <a id="downloadBtn" href="#"
+                                class="w-full inline-flex items-center justify-center gap-3 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-black font-bold px-6 py-4 rounded-xl transition-all shadow-xl shadow-amber-500/5 hover:scale-[1.015] active:scale-[0.995] group focus:outline-none focus:ring-2 focus:ring-amber-500/40 text-sm uppercase tracking-wider">
+                                <svg class="w-5 h-5 transition-transform group-hover:translate-y-0.5" fill="none"
+                                    stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Download
+                            </a>
+                        </div>
+                        <p id="movieDescription"
+                            class="text-zinc-400 text-sm sm:text-base leading-relaxed font-light max-w-2xl mx-auto hidden">
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script>
+        function formatDuration(isoDuration) {
+            if (!isoDuration || typeof isoDuration !== 'string') return 'N/A';
+            const hours = isoDuration.match(/(\d+)H/);
+            const minutes = isoDuration.match(/(\d+)M/);
+            const seconds = isoDuration.match(/(\d+)S/);
+            const parts = [];
+            if (hours) parts.push(`${hours[1]}h`);
+            if (minutes) parts.push(`${minutes[1]}m`);
+            if (seconds) parts.push(`${seconds[1]}s`);
+            return parts.length > 0 ? parts.join(' ') : isoDuration;
+        }
+        async function loadMovieDetails() {
+            const params = new URLSearchParams(window.location.search);
+            const titleParam = params.get('title');
+            const titleElement = document.getElementById('movieTitle');
+            const descriptionElement = document.getElementById('movieDescription');
+            const posterContainer = document.getElementById('posterContainer');
+            const moviePoster = document.getElementById('moviePoster');
+            const fallbackIcon = document.getElementById('fallbackIcon');
+            const metadataContainer = document.getElementById('metadataContainer');
+            const fileDuration = document.getElementById('fileDuration');
+            const downloadAction = document.getElementById('downloadAction');
+            const downloadBtn = document.getElementById('downloadBtn');
+            if (!titleParam) {
+                titleElement.textContent = "No Movie Parameters Loaded";
+                return;
+            }
+            const cleanTitle = decodeURIComponent(titleParam).trim();
+            titleElement.textContent = cleanTitle;
+            document.title = `${cleanTitle} — Download Hub`;
+            try {
+                const response = await fetch('fullData.json');
+                if (!response.ok) throw new Error('Could not access JSON repository');
+                const data = await response.json();
+                const itemsArray = Array.isArray(data) ? data : [data];
+                const movieData = itemsArray.find(item => item.metadata && item.metadata.name === cleanTitle);
+                if (movieData) {
+                    fileDuration.textContent = formatDuration(movieData.metadata.duration);
+                    if (movieData.metadata.description) {
+                        descriptionElement.textContent = movieData.art_content_text;
+                        descriptionElement.classList.remove('hidden');
+                    }
+                    if (movieData.metadata.thumbnailUrl) {
+                        moviePoster.src = movieData.metadata.thumbnailUrl;
+                        posterContainer.classList.remove('hidden');
+                        fallbackIcon.classList.add('hidden');
+                    }
+                    if (movieData.gdrive_id) {
+                        const driveBaseUrl = "https://drive.usercontent.google.com/download?export=download&confirm=t&id=";
+                        downloadBtn.href = `${driveBaseUrl}${movieData.gdrive_id}`;
+                        downloadAction.classList.remove('hidden');
+                    }
+                    metadataContainer.classList.remove('hidden');
+                } else {
+                    titleElement.textContent = "No Asset Records Found";
+                }
+            } catch (error) {
+                console.error("Critical tracking fault:", error);
+                titleElement.textContent = "Error Querying System Index";
+            }
+        }
+        loadMovieDetails();
+    </script>
+</body>
+
+</html>

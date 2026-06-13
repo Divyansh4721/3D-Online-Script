@@ -1,0 +1,2694 @@
+
+================================================================================
+FILE: G:\My Drive\Official Data\Divyansh\3D Online Script\testing.py
+================================================================================
+
+import asyncio
+import json
+from urllib.parse import urljoin
+import requests
+from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright
+EMAIL = "divyanshbansal4224@gmail.com"
+BASE_URL = "https://www.3donlinefilms.com"
+SEARCH_URL_MAIN = "https://www.3donlinefilms.com/search=Marvel"
+LOGIN_URL = "https://www.3donlinefilms.com/login.php"
+
+
+def get_player_urls():
+    print("Fetching search results from all pages...")
+    player_urls = []
+    seen = set()
+    page_num = 0
+    while True:
+        search_url = (
+            f"{SEARCH_URL_MAIN}/page/{page_num}/"
+        )
+        print(f"Checking page {page_num}: {search_url}")
+        try:
+            response = requests.get(
+                search_url,
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=30,
+            )
+            response.raise_for_status()
+        except Exception as e:
+            print(f"Failed on page {page_num}: {e}")
+            break
+        soup = BeautifulSoup(response.text, "html.parser")
+        widget_main = soup.select_one("div.widget.main")
+        if not widget_main:
+            print("div.widget.main not found, stopping.")
+            break
+        page_links = []
+        for a in widget_main.select('a[href*="/player.php?title="]'):
+            href = a.get("href")
+            if not href:
+                continue
+            full_url = urljoin(BASE_URL, href)
+            if full_url not in seen:
+                seen.add(full_url)
+                page_links.append(full_url)
+        # Stop when a page contains no matching links
+        if not page_links:
+            print(f"No player URLs found on page {page_num}. Stopping.")
+            break
+        print(f"Found {len(page_links)} URLs on page {page_num}")
+        player_urls.extend(page_links)
+        page_num += 1
+    print(f"Total unique player URLs found: {len(player_urls)}")
+    return player_urls
+
+
+async def login(page):
+    print("Logging in...")
+    await page.goto(LOGIN_URL, wait_until="commit")
+    await page.fill('input[name="user"]', EMAIL)
+    await page.click('button[type="submit"]')
+    await page.wait_for_load_state("load")
+    print("Login completed")
+
+
+async def process_url(context, url):
+    print(f"\nProcessing: {url}")
+    page = await context.new_page()
+    media_found_future = asyncio.get_running_loop().create_future()
+
+    def on_request(request):
+        if "play.php" in request.url:
+            media_data = {
+                "method": request.method,
+                "url": request.url,
+                "resource_type": request.resource_type,
+            }
+            if not media_found_future.done():
+                media_found_future.set_result(media_data)
+    page.on("request", on_request)
+    try:
+        asyncio.create_task(
+            page.goto(url, wait_until="commit")
+        )
+        try:
+            found_target = await asyncio.wait_for(
+                media_found_future,
+                timeout=15
+            )
+            print("  -> SUCCESS")
+            return {
+                "page_url": url,
+                "status": "success",
+                "media_request": found_target
+            }
+        except asyncio.TimeoutError:
+            print("  -> TIMEOUT")
+            return {
+                "page_url": url,
+                "status": "timeout",
+                "media_request": None
+            }
+    except Exception as e:
+        print(f"  -> ERROR: {e}")
+        return {
+            "page_url": url,
+            "status": "error",
+            "error": str(e)
+        }
+    finally:
+        await page.close()
+
+
+async def main():
+    player_urls = get_player_urls()
+    player_urls = [
+        url for url in player_urls
+        if url != "https://www.3donlinefilms.com/player.php?title="
+    ]
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=False
+        )
+        context = await browser.new_context()
+        login_page = await context.new_page()
+        await login(login_page)
+        await login_page.close()
+        results = []
+        for url in player_urls:
+            result = await process_url(context, url)
+            results.append(result)
+        await browser.close()
+    with open(
+        "network_requests.json",
+        "w",
+        encoding="utf-8"
+    ) as f:
+        json.dump(results, f, indent=2)
+    print(
+        f"\nSaved {len(results)} results to network_requests.json"
+    )
+if __name__ == "__main__":
+    asyncio.run(main())
+
+
+================================================================================
+FILE: G:\My Drive\Official Data\Divyansh\3D Online Script\network_requests.json
+================================================================================
+
+[
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=The+Fantastic+Four:+First+Steps",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=The.Fantastic.Four.First.Steps.TV.mp4&expires=1781123112&sig=ae1010a5c9b511feed489648254bf2f7aa18b57a677051f22c0da04a36f579fe",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Deadpool+2",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Deadpool.2.TV.mp4&expires=1781123113&sig=eb489955a61c923da14948d0658db23a91e8a62466f5e90c0b324e572f730eac",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Thunderbolts",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Thunderbolts.TV.mp4&expires=1781123114&sig=4dae9434a12272a78c3cb237472ffb65af574d9e2a24ce134869d3a4dbc73449",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Captain+America+Brave+New+World",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Captain.America.Brave.New.World.TV.mp4&expires=1781123115&sig=7c7f8e0b6614077fc0578454dd033fb761d7f5c331b2d587e44873b0dbf7d070",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Deadpool+and+Wolverine",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Deadpool.Wolverine.TV.mp4&expires=1781123116&sig=3c2451356081725792bd6cfc0710548e76464ea82a8fa7eb5a4f9de2bd016edf",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Venom+The+Last+Dance",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Venom.The.Last.Dance.TV.mp4&expires=1781123117&sig=c751aed861827dd7ec5b104ce0ae8bff7492900bc6bc30f69ef11a96eb140d3c",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Ant-Man+and+The+Wasp:+Quantumania",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Ant.Man.and.The.Wasp.Quantumania.TV.mp4&expires=1781123118&sig=0561c39a0ef02223994bae6b2dbedaca24b120ebf5b132901984994fa17c2925",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Guardians+of+the+Galaxy+Vol+III",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Guardians.of.the.Galaxy.Vol.3.TV.mp4&expires=1781123119&sig=d07362111651a787254dfbd2279709bc7d8e82b1daa0434f523433b969117d51",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Spider-Man:+No+Way+Home",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Spider.Man.No.Way.Home.TV.mp4&expires=1781123119&sig=27d3cb058d2079085de38e48c9614098a3f0f6abf893c069ca5f31695cb50d68",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Doctor+Strange+in+the+Multiverse+of+Madness",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Doctor.Strange.Multiverse.TV.mp4&expires=1781123120&sig=b4e926a3f8adfc6f6ece2db6dfddc03e5849bfe13306729f51b194cb1747eb76",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Doctor+Strange",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Doctor.Strange.TV.mp4&expires=1781123121&sig=cac54abe87b100e7e8aaea31dbed0e0416120c4da6ce8733da1128674c5445b4",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Black.Widow",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Black.Widow.TV.mp4&expires=1781123122&sig=79ef85ad8b55b86a9f2b317b02018702cb03bb0d5acc6b7914bb9fed03d3dcfc",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Captain+America+The+Winter+Soldier",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=CaptainAmerica.TheWinterSoldier.TV.mp4&expires=1781123123&sig=3eff896c260d862cf0f675f3603fa5ef6eccb9d774cb7d2327050ac4d768e1b6",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Iron+Man+3",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Iron.Man.3.TV.mp4&expires=1781123124&sig=3f05d2e4423cf97cc61c0d6ea5a14957e5ab86f6f6c49659dce0e8678265cc08",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Eternals",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Eternals.TV.mp4&expires=1781123125&sig=dcd4d8ca5658866b229a0963202ad967ef4c6d6b4581d840cae708ec643b8ca6",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Thor+Love+and+Thunder",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Thor.love.and.thunder.TV.mp4&expires=1781123125&sig=9218b553ded34a1a4d4d16d08f17da5bfde2181b4c634af7ced10b06dd17aed0",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Black+Panther:+Wakanda+Forever",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Black.Panther2.TV.mp4&expires=1781123126&sig=62804162b5d686d2a00e5ac6d12572dce1087cbf234b21ae43a496e2ba03783c",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Shang-Chi+and+the+Legend+of+the+Ten+Rings",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Shang-Chi.TV.mp4&expires=1781123127&sig=794cfe6180c3004d1172e4a62dd9d203032bb5d1dff0ed31f4907b345cde3c21",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=X+Men+Dark+Phoenix",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=X-Men.Dark.Phoenix.TV.mp4&expires=1781123128&sig=25064ab455099c11bd9508ecaaf9e3625cb3d139754e5ef22a9cb175a3520d6a",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Deadpool",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Deadpool.TV.mp4&expires=1781123129&sig=7b60c79b112d7bc1681ed66d08cb9c453b12f024a3a9ce7546402eb13c407598",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Chicken+Little",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Chicken.Little.TV.mp4&expires=1781123130&sig=0bb84d0817a1d44da47bf43f442b4798cefeef09316b343c7ca445b942306ba8",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=The+Marvels",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=The.Marvels.TV.mp4&expires=1781123131&sig=944431eec03af81157ecc81c097b0442defba49e07703e662b2d0a8470e7b6f2",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Iron+Man",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=IIron.Man.TV.mp4&expires=1781123131&sig=7c6f1317dbecff9da5bfe1052e70422df6cbaf24729d37e0bb289b997f345541",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=X+Men+First+Class+",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=XMen.First.Class.TV.mp4&expires=1781123132&sig=61b5914509f58f7a261976df0a8b4ec4ff307d0d805fa09802ee7f3d9de6e0c0",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Abominable",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Abominable.TV.mp4&expires=1781123133&sig=01c52fd0987b6824c115f7f81cc8ec104761f402d4dedaaa31ebba0f860a481a",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=SpiderMan+Far+from+Home",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Spiderman.far.from.home.TV.mp4&expires=1781123134&sig=6e352b6674ccc5fd6ba7f3805aebeeceef93eb2bfb804a1d2688782d04d6b249",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Avengers+Endgame",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Avengers.Endgame.TV.mp4&expires=1781123135&sig=dff5cbc511862a43254d160441a13778f19778afd09bf3716a931691a58211e4",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Jupiter+Ascending",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Jupiter.Ascending.TV.mp4&expires=1781123136&sig=5a0b29510b95429c7ef90696ca1461daa8e1072087c4a763aede07cda9bd085d",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Avengers+Infinity+War",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Avengers.Infinity.War.TV.mp4&expires=1781123137&sig=39437ff4d5f980486e947789cd198bd7f4c01d1ff66fa544f75a8bfed4f1c22b",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Ant-Man+and+the+Wasp",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Ant-man.and.the.wasp.TV.mp4&expires=1781123138&sig=546da37e6d554e4f9b2cbf5ecc040fe3ef9138d59f83fa451976ca14fb3008b8",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Black+Panther",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Black.Panther.TV.mp4&expires=1781123139&sig=ef8f79aaad454190c837904e0407b74ad88074c2deda5e8ebc9291aa8b29afc4",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Thor+-+Ragnarok",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Thor.Ragnarok.TV.mp4&expires=1781123140&sig=3a28f1938ba22a099a792bc3a7c8e8d45242638a0dde23a22744dd19f44805fc",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Guardians+of+the+Galaxy",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Guardians.of.the.Galaxy.TV.mp4&expires=1781123141&sig=ddf4179332fcf1bcafaf8a4c1342c5762c51d8ea976ddb6fe1985594e83c315f",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Ant-Man",
+    "status": "timeout",
+    "media_request": null
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Avengers+Age+of+Ultron",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=AGE_OF_ULTRON.TV.mp4&expires=1781123157&sig=e658dcb55f7e011a7fa61d03fd62737aa2df70925a413359debe8db95a01da76",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Thor",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Thor.TV.mp4&expires=1781123158&sig=abe24e1cb038451afbbf1c7a8e24a12d1cff73d5669c00f5a047ef3471f5d18f",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Captain+Marvel2019",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=CaptainMarvel.TV.mp4&expires=1781123158&sig=c271bb88b3739146ea508f03815fdb53d769ee4c3e934bb75cf6e513440e4311",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Captain+America+Civil+War",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Captain.America.Civil.War.TV.mp4&expires=1781123159&sig=c8dbd7f8402ae9a5b7ba44af8455f75e5981284eb201d5492b6ffff738f72d68",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=X-Men+Apocalypse",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=X.Men.Apocalypse.TV.mp4&expires=1781123160&sig=e6836ec2aaca885c28c96f11977d19d384bb6b8ea2a95311847d4c3003b07c03",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=The+Avengers",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=The.Avengers.TV.mp4&expires=1781123161&sig=9f52edbf657a326a53af3aead26191bc8179c313c3057cf35077201470e7f45e",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=Captain+America:+The+First+Avenger",
+    "status": "success",
+    "media_request": {
+      "method": "GET",
+      "url": "https://www.3donlinefilms.com/play.php?f=Captain-America-The-First-Avenger.TV.mp4&expires=1781123162&sig=39a7115f6870446ef503c3348d155d984092023beee8686551a1a27acf65d9b1",
+      "resource_type": "media"
+    }
+  },
+  {
+    "page_url": "https://www.3donlinefilms.com/player.php?title=",
+    "status": "timeout",
+    "media_request": null
+  }
+]
+
+================================================================================
+FILE: G:\My Drive\Official Data\Divyansh\3D Online Script\downloadvideosbyquery.py
+================================================================================
+
+import asyncio
+import json
+import os
+import sys
+from urllib.parse import urljoin
+import requests
+from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright
+from tqdm import tqdm
+# --- FORCE PLAYWRIGHT GLOBAL BROWSER PATH ---
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = os.path.expandvars(r"%USERPROFILE%\AppData\Local\ms-playwright")
+# --- CONFIGURATION ---
+EMAIL = "divyanshbansal4224@gmail.com"
+BASE_URL = "https://www.3donlinefilms.com"
+LOGIN_URL = "https://www.3donlinefilms.com/login.php"
+DOWNLOAD_DIR = r"C:\Users\divya\Downloads\3Dmovies"
+def get_player_urls(search_query):
+    """Scrapes the search result list pages cleanly from the terminal."""
+    print(f"\n[~] Searching directory for: '{search_query}'...")
+    player_urls = []
+    seen = set()
+    page_num = 0
+    search_url_main = f"https://www.3donlinefilms.com/search={search_query.replace(' ', '+')}"
+    
+    while True:
+        search_url = f"{search_url_main}/page/{page_num}/"
+        try:
+            response = requests.get(
+                search_url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+                timeout=20,
+            )
+            if response.status_code != 200:
+                break
+        except Exception:
+            break
+            
+        soup = BeautifulSoup(response.text, "html.parser")
+        widget_main = soup.select_one("div.widget.main")
+        if not widget_main:
+            break
+            
+        page_links = []
+        for a in widget_main.select('a[href*="/player.php?title="]'):
+            href = a.get("href")
+            if not href:
+                continue
+            full_url = urljoin(BASE_URL, href)
+            
+            if full_url == "https://www.3donlinefilms.com/player.php?title=":
+                continue
+                
+            if full_url not in seen:
+                seen.add(full_url)
+                display_title = href.split("title=")[-1].replace("+", " ")
+                page_links.append({"title": display_title, "url": full_url})
+                
+        if not page_links:
+            break
+            
+        player_urls.extend(page_links)
+        page_num += 1
+        
+    return player_urls
+async def login(page):
+    """Handles background user authentication."""
+    await page.goto(LOGIN_URL, wait_until="commit")
+    await page.fill('input[name="user"]', EMAIL)
+    await page.click('button[type="submit"]')
+    await page.wait_for_load_state("load")
+async def sniff_url(context, url):
+    """Background traces a single movie page to extract the stream URL."""
+    page = await context.new_page()
+    media_found_future = asyncio.get_running_loop().create_future()
+    def on_request(request):
+        if "play.php" in request.url:
+            if not media_found_future.done():
+                media_found_future.set_result(request.url)
+    page.on("request", on_request)
+    try:
+        asyncio.create_task(page.goto(url, wait_until="commit"))
+        try:
+            found_url = await asyncio.wait_for(media_found_future, timeout=12)
+            return found_url
+        except asyncio.TimeoutError:
+            return None
+    except Exception:
+        return None
+    finally:
+        await page.close()
+def download_file_with_cookies(url, title, session_cookies, position):
+    """Downloads the file natively using thread-safe tqdm bars showing exact MB progress."""
+    safe_title = "".join([c for c in title if c.isalnum() or c in (' ', '_', '-')]).rstrip()
+    filename = f"{safe_title}.mp4"
+    full_save_path = os.path.join(DOWNLOAD_DIR, filename)
+    cookies_dict = {cookie['name']: cookie['value'] for cookie in session_cookies}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": BASE_URL
+    }
+    try:
+        with requests.get(url, cookies=cookies_dict, headers=headers, stream=True, timeout=60) as r:
+            r.raise_for_status()
+            total_size = int(r.headers.get('content-length', 0))
+            
+            # FIXED: Replaced 'speed_fmt' with 'rate_fmt' to fix Python 3.14/tqdm compatibility
+            custom_format = "📥 {desc:<20} |{bar}| {percentage:3.0f}% ({n_fmt}/{total_fmt}) [{rate_fmt}, ETA: {elapsed}<{remaining}]"
+            
+            with tqdm(
+                total=total_size, 
+                unit='B', 
+                unit_scale=True, 
+                desc=safe_title, 
+                position=position, 
+                bar_format=custom_format,
+                leave=False
+            ) as pbar:
+                with open(full_save_path, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=32768):
+                        if chunk:
+                            f.write(chunk)
+                            pbar.update(len(chunk))
+                            
+        tqdm.write(f"✅ Finished: {filename}")
+        return True
+    except Exception as e:
+        tqdm.write(f"❌ Failed {filename}: {e}")
+        return False
+async def download_worker(semaphore, url, title, cookies, position):
+    """Worker task that handles shifting the blocking download off the async loop."""
+    async with semaphore:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, download_file_with_cookies, url, title, cookies, position)
+async def pipeline_worker(semaphore, context, item, session_cookies, position):
+    """Manages full concurrent lifecycle of an item."""
+    stream_url = await sniff_url(context, item['url'])
+    
+    if stream_url:
+        await download_worker(semaphore, stream_url, item['title'], session_cookies, position)
+    else:
+        tqdm.write(f"⚠️ [Timeout Sniffing] Could not fetch stream for: {item['title']}")
+async def process_selected_movies(movies_to_process):
+    """Orchestrates parallel pipelines and assigns separate visual rows to each task."""
+    print("\n[🤖] Booting headless background network sniffer...")
+    
+    MAX_CONCURRENT_DOWNLOADS = 10
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_DOWNLOADS)
+    
+    async with async_playwright() as p:
+        try:
+            browser = await p.chromium.launch(headless=True)
+        except Exception as e:
+            print(f"\n[❌] Playwright Error: Could not find browser executable.\n{e}")
+            return
+        context = await browser.new_context()
+        login_page = await context.new_page()
+        
+        print("[🔐] Logging into active session platform...")
+        await login(login_page)
+        await login_page.close()
+        
+        session_cookies = await context.cookies()
+        
+        print("\n🚀 Starting Parallel Downloads:\n")
+        
+        tasks = [
+            pipeline_worker(semaphore, context, item, session_cookies, position=idx) 
+            for idx, item in enumerate(movies_to_process, 1)
+        ]
+        
+        await asyncio.gather(*tasks)
+                
+        await browser.close()
+def main_terminal_ui():
+    print("=" * 60)
+    print("      🎬 NATIVE TERMINAL FILM SNIFFER & DOWNLOADER      ")
+    print("=" * 60)
+    
+    if not os.path.exists(DOWNLOAD_DIR):
+        os.makedirs(DOWNLOAD_DIR)
+    query = input("\nEnter search keyword (e.g. Marvel, Deadpool): ").strip()
+    if not query:
+        print("[❌] Query cannot be empty. Exiting.")
+        return
+        
+    movies = get_player_urls(query)
+    
+    if not movies:
+        print("[❌] No items found matching that keyword query.")
+        return
+        
+    print(f"\n[💡] Found {len(movies)} movie results matching '{query}':")
+    print("-" * 60)
+    for idx, item in enumerate(movies, 1):
+        print(f"  [{idx}] {item['title']}")
+    print("-" * 60)
+    
+    print("\nHow would you like to proceed?")
+    print("  -> Type numbers separated by commas to pick specific files (e.g. 1,3,5)")
+    print("  -> Type 'ALL' to grab every link in the list")
+    selection = input("\nYour choice: ").strip().upper()
+    
+    selected_movies = []
+    if selection == "ALL":
+        selected_movies = movies
+    else:
+        try:
+            indices = [int(x.strip()) for x in selection.split(",")]
+            for idx in indices:
+                if 1 <= idx <= len(movies):
+                    selected_movies.append(movies[idx - 1])
+        except ValueError:
+            print("[❌] Invalid entry format. Program halted.")
+            return
+    if not selected_movies:
+        print("[❌] No valid items chosen. Exiting.")
+        return
+    asyncio.run(process_selected_movies(selected_movies))
+if __name__ == "__main__":
+    main_terminal_ui()
+
+================================================================================
+FILE: G:\My Drive\Official Data\Divyansh\3D Online Script\download_links.txt
+================================================================================
+
+https://www.3donlinefilms.com/player.php?title=The+Fantastic+Four:+First+Steps
+https://www.3donlinefilms.com/player.php?title=Deadpool+2
+https://www.3donlinefilms.com/player.php?title=Thunderbolts
+https://www.3donlinefilms.com/player.php?title=Captain+America+Brave+New+World
+https://www.3donlinefilms.com/player.php?title=Deadpool+and+Wolverine
+https://www.3donlinefilms.com/player.php?title=Venom+The+Last+Dance
+https://www.3donlinefilms.com/player.php?title=Ant-Man+and+The+Wasp:+Quantumania
+https://www.3donlinefilms.com/player.php?title=Guardians+of+the+Galaxy+Vol+III
+https://www.3donlinefilms.com/player.php?title=Spider-Man:+No+Way+Home
+https://www.3donlinefilms.com/player.php?title=Doctor+Strange+in+the+Multiverse+of+Madness
+https://www.3donlinefilms.com/player.php?title=Doctor+Strange
+https://www.3donlinefilms.com/player.php?title=Black.Widow
+https://www.3donlinefilms.com/player.php?title=Captain+America+The+Winter+Soldier
+https://www.3donlinefilms.com/player.php?title=Iron+Man+3
+https://www.3donlinefilms.com/player.php?title=Eternals
+https://www.3donlinefilms.com/player.php?title=Thor+Love+and+Thunder
+https://www.3donlinefilms.com/player.php?title=Black+Panther:+Wakanda+Forever
+https://www.3donlinefilms.com/player.php?title=Shang-Chi+and+the+Legend+of+the+Ten+Rings
+https://www.3donlinefilms.com/player.php?title=X+Men+Dark+Phoenix
+https://www.3donlinefilms.com/player.php?title=Deadpool
+https://www.3donlinefilms.com/player.php?title=Chicken+Little
+https://www.3donlinefilms.com/player.php?title=The+Marvels
+https://www.3donlinefilms.com/player.php?title=Iron+Man
+https://www.3donlinefilms.com/player.php?title=X+Men+First+Class+
+https://www.3donlinefilms.com/player.php?title=Abominable
+https://www.3donlinefilms.com/player.php?title=SpiderMan+Far+from+Home
+https://www.3donlinefilms.com/player.php?title=Avengers+Endgame
+https://www.3donlinefilms.com/player.php?title=Jupiter+Ascending
+https://www.3donlinefilms.com/player.php?title=Avengers+Infinity+War
+https://www.3donlinefilms.com/player.php?title=Ant-Man+and+the+Wasp
+https://www.3donlinefilms.com/player.php?title=Black+Panther
+https://www.3donlinefilms.com/player.php?title=Thor+-+Ragnarok
+https://www.3donlinefilms.com/player.php?title=Guardians+of+the+Galaxy
+https://www.3donlinefilms.com/player.php?title=Ant-Man
+https://www.3donlinefilms.com/player.php?title=Avengers+Age+of+Ultron
+https://www.3donlinefilms.com/player.php?title=Thor
+https://www.3donlinefilms.com/player.php?title=Captain+Marvel2019
+https://www.3donlinefilms.com/player.php?title=Captain+America+Civil+War
+https://www.3donlinefilms.com/player.php?title=X-Men+Apocalypse
+https://www.3donlinefilms.com/player.php?title=The+Avengers
+https://www.3donlinefilms.com/player.php?title=Captain+America:+The+First+Avenger
+
+
+https://www.3donlinefilms.com/player.php?title=Avatar:+Fire+and+Ash
+https://www.3donlinefilms.com/player.php?title=Ant-Man+and+The+Wasp:+Quantumania
+https://www.3donlinefilms.com/player.php?title=Avatar:+The+Way+of+Water+Part+one
+https://www.3donlinefilms.com/player.php?title=Alice+Through+the+Looking+Glass
+https://www.3donlinefilms.com/player.php?title=Black.Widow
+https://www.3donlinefilms.com/player.php?title=Fright+Night
+https://www.3donlinefilms.com/player.php?title=Avatar:+The+Way+of+Water+Part+two
+https://www.3donlinefilms.com/player.php?title=Hotel+Transylvania+3+Summer+Vacation
+https://www.3donlinefilms.com/player.php?title=Bumblebee
+https://www.3donlinefilms.com/player.php?title=Home+Alone
+https://www.3donlinefilms.com/player.php?title=Bohemian+Rhapsody
+https://www.3donlinefilms.com/player.php?title=Deadpool
+https://www.3donlinefilms.com/player.php?title=Chicken+Little
+https://www.3donlinefilms.com/player.php?title=The+Departed
+https://www.3donlinefilms.com/player.php?title=Aquaman+and+The+Lost+Kingdom
+https://www.3donlinefilms.com/player.php?title=Dune+Part+Two
+https://www.3donlinefilms.com/player.php?title=How+the+Grinch+Stole+Christmas
+https://www.3donlinefilms.com/player.php?title=Aladdin
+https://www.3donlinefilms.com/player.php?title=Dumbo
+https://www.3donlinefilms.com/player.php?title=Alita+Battle+Angel
+https://www.3donlinefilms.com/player.php?title=Ant-Man+and+the+Wasp
+https://www.3donlinefilms.com/player.php?title=Asterix+The+Mansions+of+the+Gods
+https://www.3donlinefilms.com/player.php?title=Resident+Evil+Damnation
+https://www.3donlinefilms.com/player.php?title=Battle+of+the+Year
+https://www.3donlinefilms.com/player.php?title=Captain+Marvel2019
+https://www.3donlinefilms.com/player.php?title=Elf
+https://www.3donlinefilms.com/player.php?title=The+Angry+Birds+Movie
+
+
+https://www.3donlinefilms.com/player.php?title=Avatar:+Fire+and+Ash
+https://www.3donlinefilms.com/player.php?title=Avatar:+The+Way+of+Water+Part+one
+https://www.3donlinefilms.com/player.php?title=Avatar+ExtendedVersion
+https://www.3donlinefilms.com/player.php?title=Avatar:+The+Way+of+Water+Part+two
+https://www.3donlinefilms.com/player.php?title=Jumanji:+The+Next+Level
+https://www.3donlinefilms.com/player.php?title=Battle+for+Terra
+https://www.3donlinefilms.com/player.php?title=Jumanji1
+https://www.3donlinefilms.com/player.php?title=Free+Preview+Sample
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Fast+X
+https://www.3donlinefilms.com/player.php?title=Fast+Furious+Presents+Hobbs+Shaw
+https://www.3donlinefilms.com/player.php?title=Jupiter+Ascending
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda2
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda
+https://www.3donlinefilms.com/player.php?title=Batman+v+Superman+Dawn+of+Justice
+
+
+
+https://www.3donlinefilms.com/player.php?title=Shang-Chi+and+the+Legend+of+the+Ten+Rings
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda+4
+https://www.3donlinefilms.com/player.php?title=Ip+Man
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda2
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda+3
+
+
+
+https://www.3donlinefilms.com/player.php?title=The+Lost+World:+Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=Jurassic+World
+
+
+https://www.3donlinefilms.com/player.php?title=Jurassic+World:+Rebirth
+https://www.3donlinefilms.com/player.php?title=Jurassic+World:+Dominion
+https://www.3donlinefilms.com/player.php?title=The+Lost+World:+Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=JurassicWorld+Fallen+Kingdom
+https://www.3donlinefilms.com/player.php?title=Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=Jurassic+World
+
+
+
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean:+At+World+End
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean:+The+Curse+of+the+Black+Pearl
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean+On+Stranger+Tides
+https://www.3donlinefilms.com/player.php?title=PiratesoftheCaribbean5
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean:+Dead+Man+Chest
+
+
+
+https://www.3donlinefilms.com/player.php?title=Mission+Impossible+The+Final+Reckoning+Part+Two
+https://www.3donlinefilms.com/player.php?title=Mission+Impossible:+Fallout
+https://www.3donlinefilms.com/player.php?title=Mission+Impossible+Dead+Reckoning+Part+One
+
+
+
+https://www.3donlinefilms.com/player.php?title=John+Wick
+https://www.3donlinefilms.com/player.php?title=Ballerina
+https://www.3donlinefilms.com/player.php?title=John+Wick:+Chapter4
+https://www.3donlinefilms.com/player.php?title=John+Wick3
+
+
+
+https://www.3donlinefilms.com/player.php?title=Batman+Begins
+https://www.3donlinefilms.com/player.php?title=Batman
+https://www.3donlinefilms.com/player.php?title=The+Dark+Knight+Rises
+https://www.3donlinefilms.com/player.php?title=The+Flash
+https://www.3donlinefilms.com/player.php?title=The+Lego+Movie2
+https://www.3donlinefilms.com/player.php?title=The+lego+batman+movie
+https://www.3donlinefilms.com/player.php?title=Batman+v+Superman+Dawn+of+Justice
+https://www.3donlinefilms.com/player.php?title=Justice+League
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=The+Princess+Bride
+https://www.3donlinefilms.com/player.php?title=Send+Help
+https://www.3donlinefilms.com/player.php?title=Constantine
+https://www.3donlinefilms.com/player.php?title=Halloween
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Deathly+Hallows:+Part+2
+https://www.3donlinefilms.com/player.php?title=Batman+Begins
+https://www.3donlinefilms.com/player.php?title=Batman
+https://www.3donlinefilms.com/player.php?title=Jurassic+World:+Rebirth
+https://www.3donlinefilms.com/player.php?title=Superman
+https://www.3donlinefilms.com/player.php?title=Bring+Her+Back+
+https://www.3donlinefilms.com/player.php?title=How+to+Train+Your+Dragon+2025
+https://www.3donlinefilms.com/player.php?title=Sleepy+Hollow
+https://www.3donlinefilms.com/player.php?title=Thunderbolts
+https://www.3donlinefilms.com/player.php?title=Annihilation
+https://www.3donlinefilms.com/player.php?title=Weird+Science
+https://www.3donlinefilms.com/player.php?title=Ballerina
+https://www.3donlinefilms.com/player.php?title=The+Shawshank+Redemption
+https://www.3donlinefilms.com/player.php?title=The+Day+After+Tomorrow
+https://www.3donlinefilms.com/player.php?title=Final+Destination+Bloodlines+
+https://www.3donlinefilms.com/player.php?title=Sinners
+https://www.3donlinefilms.com/player.php?title=The+Bourne+Identity
+https://www.3donlinefilms.com/player.php?title=Life+Is+Beautiful
+https://www.3donlinefilms.com/player.php?title=The+Usual+Suspects
+https://www.3donlinefilms.com/player.php?title=Who+Framed+Roger+Rabbit
+https://www.3donlinefilms.com/player.php?title=Mickey+17
+https://www.3donlinefilms.com/player.php?title=Mufasa+The+Lion+King+
+https://www.3donlinefilms.com/player.php?title=Flow
+https://www.3donlinefilms.com/player.php?title=The+Substance
+https://www.3donlinefilms.com/player.php?title=Kingdom+of+the+Planet+of+the+Apes
+https://www.3donlinefilms.com/player.php?title=Furiosa:+A+Mad+Max+Saga
+https://www.3donlinefilms.com/player.php?title=Oppenheimer
+https://www.3donlinefilms.com/player.php?title=Spider-Man+Across+the+Spider-Verse
+https://www.3donlinefilms.com/player.php?title=Interstellar
+https://www.3donlinefilms.com/player.php?title=The+Boy+and+the+Heron
+https://www.3donlinefilms.com/player.php?title=John+Wick:+Chapter4
+https://www.3donlinefilms.com/player.php?title=Titanic
+https://www.3donlinefilms.com/player.php?title=Waterworld
+https://www.3donlinefilms.com/player.php?title=The+Snow+Queen+2
+https://www.3donlinefilms.com/player.php?title=Aladdin_1992
+https://www.3donlinefilms.com/player.php?title=Prey
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+II+Attack+of+the+Clones
+https://www.3donlinefilms.com/player.php?title=Spy+Kids+3D:+Game+Over
+https://www.3donlinefilms.com/player.php?title=The+Matrix+Revolutions
+https://www.3donlinefilms.com/player.php?title=The+Matrix+Resurrections
+https://www.3donlinefilms.com/player.php?title=John+Wick3
+https://www.3donlinefilms.com/player.php?title=Black+Adam
+https://www.3donlinefilms.com/player.php?title=The+Flash
+https://www.3donlinefilms.com/player.php?title=Austin+Powers+The+Spy+Who+Shagged+Me
+https://www.3donlinefilms.com/player.php?title=Battle+Los+Angeles
+https://www.3donlinefilms.com/player.php?title=Friday+the+13th+Part+III
+https://www.3donlinefilms.com/player.php?title=The+Suicide+Squad
+https://www.3donlinefilms.com/player.php?title=Free+Guy
+https://www.3donlinefilms.com/player.php?title=Back+to+the+Future
+https://www.3donlinefilms.com/player.php?title=Superman:+The+Movie
+https://www.3donlinefilms.com/player.php?title=V+for+Vendetta
+https://www.3donlinefilms.com/player.php?title=The+Pope+Exorcist
+https://www.3donlinefilms.com/player.php?title=A+Nightmare+on+Elm+Street
+https://www.3donlinefilms.com/player.php?title=Indiana+Jones+and+the+Dial+of+Destiny
+https://www.3donlinefilms.com/player.php?title=Zombieland:+Double+Tap
+https://www.3donlinefilms.com/player.php?title=Home+Alone
+https://www.3donlinefilms.com/player.php?title=Dunkirk
+https://www.3donlinefilms.com/player.php?title=Dungeons+and+Dragons:+Honor+Among+Thieves
+https://www.3donlinefilms.com/player.php?title=Totally+Killer
+https://www.3donlinefilms.com/player.php?title=Bohemian+Rhapsody
+https://www.3donlinefilms.com/player.php?title=Deadpool
+https://www.3donlinefilms.com/player.php?title=Independence+Day+Extended
+https://www.3donlinefilms.com/player.php?title=Chicken+Little
+https://www.3donlinefilms.com/player.php?title=Zombieland
+https://www.3donlinefilms.com/player.php?title=The+Departed
+https://www.3donlinefilms.com/player.php?title=Chappie
+https://www.3donlinefilms.com/player.php?title=The+Lost+World:+Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=Total+Recall+2012
+https://www.3donlinefilms.com/player.php?title=Space+Jam:+A+New+Legacy
+https://www.3donlinefilms.com/player.php?title=Nobody+
+https://www.3donlinefilms.com/player.php?title=Alien:+Director+Cut
+https://www.3donlinefilms.com/player.php?title=A+Hard+Day+Night
+https://www.3donlinefilms.com/player.php?title=The+Fearless+Vampire+Killers
+https://www.3donlinefilms.com/player.php?title=Drive
+https://www.3donlinefilms.com/player.php?title=Mortal
+https://www.3donlinefilms.com/player.php?title=Legion
+https://www.3donlinefilms.com/player.php?title=Alpha
+https://www.3donlinefilms.com/player.php?title=The+Hunger+Games:+The+Ballad+of+Songbirds+and+Snakes
+https://www.3donlinefilms.com/player.php?title=Final+Fantasy:+The+Spirits+Within
+https://www.3donlinefilms.com/player.php?title=Civil+War
+https://www.3donlinefilms.com/player.php?title=Stargate
+https://www.3donlinefilms.com/player.php?title=Donnie+Darko
+https://www.3donlinefilms.com/player.php?title=Braveheart+
+https://www.3donlinefilms.com/player.php?title=Akira
+https://www.3donlinefilms.com/player.php?title=Fight+Club
+https://www.3donlinefilms.com/player.php?title=Adrift
+https://www.3donlinefilms.com/player.php?title=Adar
+https://www.3donlinefilms.com/player.php?title=The+Great+Wave
+https://www.3donlinefilms.com/player.php?title=Udun
+https://www.3donlinefilms.com/player.php?title=Alloyed
+https://www.3donlinefilms.com/player.php?title=Looper
+https://www.3donlinefilms.com/player.php?title=The+Hitchhiker+Guide+to+the+Galaxy
+https://www.3donlinefilms.com/player.php?title=The+Simpsons+Movie
+https://www.3donlinefilms.com/player.php?title=Dune+Part+Two
+https://www.3donlinefilms.com/player.php?title=Ghost+in+the+Shell+1995
+https://www.3donlinefilms.com/player.php?title=Resident+Evil
+https://www.3donlinefilms.com/player.php?title=RRR
+https://www.3donlinefilms.com/player.php?title=Resident+Evil:+Apocalypse
+https://www.3donlinefilms.com/player.php?title=Scream+VI
+https://www.3donlinefilms.com/player.php?title=The+Rocky+Horror+Picture+Show
+https://www.3donlinefilms.com/player.php?title=Split
+https://www.3donlinefilms.com/player.php?title=Beetlejuice+Beetlejuice
+https://www.3donlinefilms.com/player.php?title=Ghostbusters+1984
+https://www.3donlinefilms.com/player.php?title=Alien+Covenant
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+V+The+Empire+Strikes+Back
+https://www.3donlinefilms.com/player.php?title=Edward+Scissorhands
+https://www.3donlinefilms.com/player.php?title=Scrooge+A+Christmas+Carol
+https://www.3donlinefilms.com/player.php?title=Transformers+One
+https://www.3donlinefilms.com/player.php?title=Cast+Away
+https://www.3donlinefilms.com/player.php?title=eXistenZ
+https://www.3donlinefilms.com/player.php?title=Django+Unchained
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+III+Revenge+of+the+Sith
+https://www.3donlinefilms.com/player.php?title=Resident+Evil+Extinction
+https://www.3donlinefilms.com/player.php?title=Zack+Snyders+Justice+League
+https://www.3donlinefilms.com/player.php?title=Tarzan
+https://www.3donlinefilms.com/player.php?title=Cinderella
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+IV+A+New+Hope
+https://www.3donlinefilms.com/player.php?title=Ip+Man
+https://www.3donlinefilms.com/player.php?title=Fantasia
+https://www.3donlinefilms.com/player.php?title=King+Kong
+https://www.3donlinefilms.com/player.php?title=Troy
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+VI+Return+of+the+Jedi
+https://www.3donlinefilms.com/player.php?title=Iron+Man
+https://www.3donlinefilms.com/player.php?title=Minority+Report
+https://www.3donlinefilms.com/player.php?title=Your+Name
+https://www.3donlinefilms.com/player.php?title=Shazam
+https://www.3donlinefilms.com/player.php?title=Sausage+Party
+https://www.3donlinefilms.com/player.php?title=Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=Pacific+Rim+Uprising
+https://www.3donlinefilms.com/player.php?title=Jaws+3D
+https://www.3donlinefilms.com/player.php?title=Beauty+and+the+Beast+1991
+https://www.3donlinefilms.com/player.php?title=Man+of+Steel
+https://www.3donlinefilms.com/player.php?title=Elf
+https://www.3donlinefilms.com/player.php?title=The+Exorcist
+https://www.3donlinefilms.com/player.php?title=Joker
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean:+Dead+Man+Chest
+https://www.3donlinefilms.com/player.php?title=Star+Trek+XXX+
+https://www.3donlinefilms.com/player.php?title=Final+Destination
+https://www.3donlinefilms.com/player.php?title=Scorpions+Live+in+3D
+https://www.3donlinefilms.com/player.php?title=The+Lego+Movie
+https://www.3donlinefilms.com/player.php?title=Elven+Kings+Under+the+Sky
+https://www.3donlinefilms.com/player.php?title=The+Eagle+and+the+Sceptre
+https://www.3donlinefilms.com/player.php?title=Eldest
+https://www.3donlinefilms.com/player.php?title=Halls+of+Stone
+https://www.3donlinefilms.com/player.php?title=Where+Is+He
+https://www.3donlinefilms.com/player.php?title=Doomed+to+Die
+
+
+
+https://www.3donlinefilms.com/player.php?title=Final+Destination+Bloodlines+
+https://www.3donlinefilms.com/player.php?title=Immortals
+https://www.3donlinefilms.com/player.php?title=Zombieland:+Double+Tap
+https://www.3donlinefilms.com/player.php?title=The+Final+Destination
+https://www.3donlinefilms.com/player.php?title=Final+Destination+5
+https://www.3donlinefilms.com/player.php?title=Final+Destination
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=X+Men+Dark+Phoenix
+https://www.3donlinefilms.com/player.php?title=X+Men+First+Class+
+https://www.3donlinefilms.com/player.php?title=X-Men+Apocalypse
+https://www.3donlinefilms.com/player.php?title=X-Men+Days+of+Future+Past
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Captain+America+Brave+New+World
+https://www.3donlinefilms.com/player.php?title=Black.Widow
+https://www.3donlinefilms.com/player.php?title=Eternals
+https://www.3donlinefilms.com/player.php?title=Avengers+Endgame
+https://www.3donlinefilms.com/player.php?title=Avengers+Infinity+War
+https://www.3donlinefilms.com/player.php?title=Spider-Man+Homecoming
+https://www.3donlinefilms.com/player.php?title=Ant-Man
+https://www.3donlinefilms.com/player.php?title=Avengers+Age+of+Ultron
+https://www.3donlinefilms.com/player.php?title=Captain+America+Civil+War
+https://www.3donlinefilms.com/player.php?title=The+Avengers
+
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Charlie+and+the+Chocolate+Factory
+https://www.3donlinefilms.com/player.php?title=The+Fantastic+Four:+First+Steps
+https://www.3donlinefilms.com/player.php?title=Life+Is+Beautiful
+https://www.3donlinefilms.com/player.php?title=The+Boy+and+the+Heron
+https://www.3donlinefilms.com/player.php?title=Godzilla+vs+Kong
+https://www.3donlinefilms.com/player.php?title=Fantastic+Beasts+The+Crimes+of+Grindelwald
+https://www.3donlinefilms.com/player.php?title=Battle+for+Terra
+https://www.3donlinefilms.com/player.php?title=Fantastic+Beasts:+The+Secrets+of+Dumbledore
+https://www.3donlinefilms.com/player.php?title=Fantastic+Beasts+and+Where+to+Find+Them
+https://www.3donlinefilms.com/player.php?title=Ready++Player+One
+https://www.3donlinefilms.com/player.php?title=Beauty+and+the+Beast+1991
+https://www.3donlinefilms.com/player.php?title=Lichtmond+3+Days+of+Eternity
+https://www.3donlinefilms.com/player.php?title=Coraline
+https://www.3donlinefilms.com/player.php?title=The+Book+of+Life
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Dune
+https://www.3donlinefilms.com/player.php?title=Dune+Part+Two
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Godzilla+x+Kong+The+New+Empire
+https://www.3donlinefilms.com/player.php?title=Godzilla+Minus+One
+https://www.3donlinefilms.com/player.php?title=Godzilla+vs+Kong
+https://www.3donlinefilms.com/player.php?title=Godzilla+King+of+the+Monsters
+https://www.3donlinefilms.com/player.php?title=Godzilla
+
+
+https://www.3donlinefilms.com/player.php?title=Godzilla+x+Kong+The+New+Empire
+https://www.3donlinefilms.com/player.php?title=Godzilla+vs+Kong
+https://www.3donlinefilms.com/player.php?title=King+Kong
+https://www.3donlinefilms.com/player.php?title=Skyscraper
+https://www.3donlinefilms.com/player.php?title=Kong:+Skull+Island
+https://www.3donlinefilms.com/player.php?title=Pixels
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Kingdom+of+the+Planet+of+the+Apes
+https://www.3donlinefilms.com/player.php?title=Dawn+of+the+Planet+of+the+Apes
+https://www.3donlinefilms.com/player.php?title=War+for+the+Planet+of+the+Apes
+https://www.3donlinefilms.com/player.php?title=Elysium
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Deathly+Hallows:+Part+2
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Deathly+Hallows:+Part+1
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Half+Blood+Prince
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Order+of+the+Phoenix
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Goblet+of+Fire
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Prisoner+of+Azkaban
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Chamber+of+Secrets
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Sorcerer+Stone
+https://www.3donlinefilms.com/player.php?title=Fantastic+Beasts+and+Where+to+Find+Them
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Men+in+Black+3
+
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Spider-Man+Across+the+Spider-Verse
+https://www.3donlinefilms.com/player.php?title=Spider-Man:+No+Way+Home
+https://www.3donlinefilms.com/player.php?title=Doctor+Strange+in+the+Multiverse+of+Madness
+https://www.3donlinefilms.com/player.php?title=The+Simpsons+Movie
+https://www.3donlinefilms.com/player.php?title=SpiderMan+Far+from+Home
+https://www.3donlinefilms.com/player.php?title=Spiderman+into+the+Spiderverse
+https://www.3donlinefilms.com/player.php?title=Cloudy+with+a+Chance+of+MeatballsII
+https://www.3donlinefilms.com/player.php?title=The+Amazing+Spider-Man
+https://www.3donlinefilms.com/player.php?title=Spider-Man+Homecoming
+https://www.3donlinefilms.com/player.php?title=The+Amazing+SpiderMan+2
+https://www.3donlinefilms.com/player.php?title=The+Eagle+and+the+Sceptre
+
+
+https://www.3donlinefilms.com/player.php?title=The+Fantastic+Four:+First+Steps
+
+
+
+https://www.3donlinefilms.com/player.php?title=Deadpool+and+Wolverine
+https://www.3donlinefilms.com/player.php?title=The+Wolwerine
+
+================================================================================
+FILE: G:\My Drive\Official Data\Divyansh\3D Online Script\getmoviebyinput.py
+================================================================================
+
+import os
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+
+# --- CONFIGURATION ---
+BASE_URL = "https://www.3donlinefilms.com"
+
+
+def get_player_urls(search_query):
+    """Scrapes the search result list pages and returns a flat list of page URL strings."""
+    print(f"[~] Searching directory for: '{search_query}'...")
+    player_urls = []
+    seen = set()
+    page_num = 0
+    # Clean up search query for URL formatting
+    formatted_query = search_query.replace(" ", "+")
+    search_url_main = f"{BASE_URL}/search={formatted_query}"
+    while True:
+        search_url = f"{search_url_main}/page/{page_num}/"
+        try:
+            response = requests.get(
+                search_url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                },
+                timeout=20,
+            )
+            if response.status_code != 200:
+                break
+        except Exception:
+            break
+        soup = BeautifulSoup(response.text, "html.parser")
+        widget_main = soup.select_one("div.widget.main")
+        # If the expected container isn't found, we've hit the end or an invalid page
+        if not widget_main:
+            break
+        page_links_found = False
+        # Extracting the anchor tags targeting the movie page URLs
+        for a in widget_main.select('a[href*="/player.php?title="]'):
+            href = a.get("href")
+            if not href:
+                continue
+            full_url = urljoin(BASE_URL, href)
+            # Skip empty or broken title queries
+            if full_url == f"{BASE_URL}/player.php?title=":
+                continue
+            if full_url not in seen:
+                seen.add(full_url)
+                player_urls.append(full_url)
+                page_links_found = True
+        # If no new links were extracted from this page, stop iterating
+        if not page_links_found:
+            break
+        page_num += 1
+    return player_urls
+
+
+if __name__ == "__main__":
+    print("--- 3D Online Films Scraper Loop Started ---")
+    print("Type 'exit' or press Enter on an empty line to quit.\n")
+
+    while True:
+        # 1. Ask the user for input again and again
+        query = (
+            input("Enter search keyword (e.g. Marvel, Deadpool): ")
+            .strip()
+            .lower()
+        )
+
+        # 2. Check for exit conditions
+        if not query or query == "exit":
+            print("\nExiting script. Goodbye!")
+            break
+
+        # 3. Process the query
+        movie_urls = get_player_urls(query)
+
+        # 4. Display results
+        print(f"\nCollected {len(movie_urls)} page URLs:")
+        print("-" * 60)
+        for url in movie_urls:
+            print(url)
+        print("-" * 60)
+        print("\n" + "=" * 40 + "\n")  # Visual separator for the next loop
+
+================================================================================
+FILE: G:\My Drive\Official Data\Divyansh\3D Online Script\download_links copy.txt
+================================================================================
+
+https://www.3donlinefilms.com/player.php?title=The+Fantastic+Four:+First+Steps
+https://www.3donlinefilms.com/player.php?title=Deadpool+2
+https://www.3donlinefilms.com/player.php?title=Thunderbolts
+https://www.3donlinefilms.com/player.php?title=Captain+America+Brave+New+World
+https://www.3donlinefilms.com/player.php?title=Deadpool+and+Wolverine
+https://www.3donlinefilms.com/player.php?title=Venom+The+Last+Dance
+https://www.3donlinefilms.com/player.php?title=Ant-Man+and+The+Wasp:+Quantumania
+https://www.3donlinefilms.com/player.php?title=Guardians+of+the+Galaxy+Vol+III
+https://www.3donlinefilms.com/player.php?title=Spider-Man:+No+Way+Home
+https://www.3donlinefilms.com/player.php?title=Doctor+Strange+in+the+Multiverse+of+Madness
+https://www.3donlinefilms.com/player.php?title=Doctor+Strange
+https://www.3donlinefilms.com/player.php?title=Black.Widow
+https://www.3donlinefilms.com/player.php?title=Captain+America+The+Winter+Soldier
+https://www.3donlinefilms.com/player.php?title=Iron+Man+3
+https://www.3donlinefilms.com/player.php?title=Eternals
+https://www.3donlinefilms.com/player.php?title=Thor+Love+and+Thunder
+https://www.3donlinefilms.com/player.php?title=Black+Panther:+Wakanda+Forever
+https://www.3donlinefilms.com/player.php?title=Shang-Chi+and+the+Legend+of+the+Ten+Rings
+https://www.3donlinefilms.com/player.php?title=X+Men+Dark+Phoenix
+https://www.3donlinefilms.com/player.php?title=Deadpool
+https://www.3donlinefilms.com/player.php?title=Chicken+Little
+https://www.3donlinefilms.com/player.php?title=The+Marvels
+https://www.3donlinefilms.com/player.php?title=Iron+Man
+https://www.3donlinefilms.com/player.php?title=X+Men+First+Class+
+https://www.3donlinefilms.com/player.php?title=Abominable
+https://www.3donlinefilms.com/player.php?title=SpiderMan+Far+from+Home
+https://www.3donlinefilms.com/player.php?title=Avengers+Endgame
+https://www.3donlinefilms.com/player.php?title=Jupiter+Ascending
+https://www.3donlinefilms.com/player.php?title=Avengers+Infinity+War
+https://www.3donlinefilms.com/player.php?title=Ant-Man+and+the+Wasp
+https://www.3donlinefilms.com/player.php?title=Black+Panther
+https://www.3donlinefilms.com/player.php?title=Thor+-+Ragnarok
+https://www.3donlinefilms.com/player.php?title=Guardians+of+the+Galaxy
+https://www.3donlinefilms.com/player.php?title=Ant-Man
+https://www.3donlinefilms.com/player.php?title=Avengers+Age+of+Ultron
+https://www.3donlinefilms.com/player.php?title=Thor
+https://www.3donlinefilms.com/player.php?title=Captain+Marvel2019
+https://www.3donlinefilms.com/player.php?title=Captain+America+Civil+War
+https://www.3donlinefilms.com/player.php?title=X-Men+Apocalypse
+https://www.3donlinefilms.com/player.php?title=The+Avengers
+https://www.3donlinefilms.com/player.php?title=Captain+America:+The+First+Avenger
+
+
+https://www.3donlinefilms.com/player.php?title=Avatar:+Fire+and+Ash
+https://www.3donlinefilms.com/player.php?title=Ant-Man+and+The+Wasp:+Quantumania
+https://www.3donlinefilms.com/player.php?title=Avatar:+The+Way+of+Water+Part+one
+https://www.3donlinefilms.com/player.php?title=Alice+Through+the+Looking+Glass
+https://www.3donlinefilms.com/player.php?title=Black.Widow
+https://www.3donlinefilms.com/player.php?title=Fright+Night
+https://www.3donlinefilms.com/player.php?title=Avatar:+The+Way+of+Water+Part+two
+https://www.3donlinefilms.com/player.php?title=Hotel+Transylvania+3+Summer+Vacation
+https://www.3donlinefilms.com/player.php?title=Bumblebee
+https://www.3donlinefilms.com/player.php?title=Home+Alone
+https://www.3donlinefilms.com/player.php?title=Bohemian+Rhapsody
+https://www.3donlinefilms.com/player.php?title=Deadpool
+https://www.3donlinefilms.com/player.php?title=Chicken+Little
+https://www.3donlinefilms.com/player.php?title=The+Departed
+https://www.3donlinefilms.com/player.php?title=Aquaman+and+The+Lost+Kingdom
+https://www.3donlinefilms.com/player.php?title=Dune+Part+Two
+https://www.3donlinefilms.com/player.php?title=How+the+Grinch+Stole+Christmas
+https://www.3donlinefilms.com/player.php?title=Aladdin
+https://www.3donlinefilms.com/player.php?title=Dumbo
+https://www.3donlinefilms.com/player.php?title=Alita+Battle+Angel
+https://www.3donlinefilms.com/player.php?title=Ant-Man+and+the+Wasp
+https://www.3donlinefilms.com/player.php?title=Asterix+The+Mansions+of+the+Gods
+https://www.3donlinefilms.com/player.php?title=Resident+Evil+Damnation
+https://www.3donlinefilms.com/player.php?title=Battle+of+the+Year
+https://www.3donlinefilms.com/player.php?title=Captain+Marvel2019
+https://www.3donlinefilms.com/player.php?title=Elf
+https://www.3donlinefilms.com/player.php?title=The+Angry+Birds+Movie
+
+
+https://www.3donlinefilms.com/player.php?title=Avatar:+Fire+and+Ash
+https://www.3donlinefilms.com/player.php?title=Avatar:+The+Way+of+Water+Part+one
+https://www.3donlinefilms.com/player.php?title=Avatar+ExtendedVersion
+https://www.3donlinefilms.com/player.php?title=Avatar:+The+Way+of+Water+Part+two
+https://www.3donlinefilms.com/player.php?title=Jumanji:+The+Next+Level
+https://www.3donlinefilms.com/player.php?title=Battle+for+Terra
+https://www.3donlinefilms.com/player.php?title=Jumanji1
+https://www.3donlinefilms.com/player.php?title=Free+Preview+Sample
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Fast+X
+https://www.3donlinefilms.com/player.php?title=Fast+Furious+Presents+Hobbs+Shaw
+https://www.3donlinefilms.com/player.php?title=Jupiter+Ascending
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda2
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda
+https://www.3donlinefilms.com/player.php?title=Batman+v+Superman+Dawn+of+Justice
+
+
+
+https://www.3donlinefilms.com/player.php?title=Shang-Chi+and+the+Legend+of+the+Ten+Rings
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda+4
+https://www.3donlinefilms.com/player.php?title=Ip+Man
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda2
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda+3
+
+
+
+https://www.3donlinefilms.com/player.php?title=The+Lost+World:+Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=Jurassic+World
+
+
+https://www.3donlinefilms.com/player.php?title=Jurassic+World:+Rebirth
+https://www.3donlinefilms.com/player.php?title=Jurassic+World:+Dominion
+https://www.3donlinefilms.com/player.php?title=The+Lost+World:+Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=JurassicWorld+Fallen+Kingdom
+https://www.3donlinefilms.com/player.php?title=Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=Jurassic+World
+
+
+
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean:+At+World+End
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean:+The+Curse+of+the+Black+Pearl
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean+On+Stranger+Tides
+https://www.3donlinefilms.com/player.php?title=PiratesoftheCaribbean5
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean:+Dead+Man+Chest
+
+
+
+https://www.3donlinefilms.com/player.php?title=Mission+Impossible+The+Final+Reckoning+Part+Two
+https://www.3donlinefilms.com/player.php?title=Mission+Impossible:+Fallout
+https://www.3donlinefilms.com/player.php?title=Mission+Impossible+Dead+Reckoning+Part+One
+
+
+
+https://www.3donlinefilms.com/player.php?title=John+Wick
+https://www.3donlinefilms.com/player.php?title=Ballerina
+https://www.3donlinefilms.com/player.php?title=John+Wick:+Chapter4
+https://www.3donlinefilms.com/player.php?title=John+Wick3
+
+
+
+https://www.3donlinefilms.com/player.php?title=Batman+Begins
+https://www.3donlinefilms.com/player.php?title=Batman
+https://www.3donlinefilms.com/player.php?title=The+Dark+Knight+Rises
+https://www.3donlinefilms.com/player.php?title=The+Flash
+https://www.3donlinefilms.com/player.php?title=The+Lego+Movie2
+https://www.3donlinefilms.com/player.php?title=The+lego+batman+movie
+https://www.3donlinefilms.com/player.php?title=Batman+v+Superman+Dawn+of+Justice
+https://www.3donlinefilms.com/player.php?title=Justice+League
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=The+Princess+Bride
+https://www.3donlinefilms.com/player.php?title=Send+Help
+https://www.3donlinefilms.com/player.php?title=Constantine
+https://www.3donlinefilms.com/player.php?title=Halloween
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Deathly+Hallows:+Part+2
+https://www.3donlinefilms.com/player.php?title=Batman+Begins
+https://www.3donlinefilms.com/player.php?title=Batman
+https://www.3donlinefilms.com/player.php?title=Jurassic+World:+Rebirth
+https://www.3donlinefilms.com/player.php?title=Superman
+https://www.3donlinefilms.com/player.php?title=Bring+Her+Back+
+https://www.3donlinefilms.com/player.php?title=How+to+Train+Your+Dragon+2025
+https://www.3donlinefilms.com/player.php?title=Sleepy+Hollow
+https://www.3donlinefilms.com/player.php?title=Thunderbolts
+https://www.3donlinefilms.com/player.php?title=Annihilation
+https://www.3donlinefilms.com/player.php?title=Weird+Science
+https://www.3donlinefilms.com/player.php?title=Ballerina
+https://www.3donlinefilms.com/player.php?title=The+Shawshank+Redemption
+https://www.3donlinefilms.com/player.php?title=The+Day+After+Tomorrow
+https://www.3donlinefilms.com/player.php?title=Final+Destination+Bloodlines+
+https://www.3donlinefilms.com/player.php?title=Sinners
+https://www.3donlinefilms.com/player.php?title=The+Bourne+Identity
+https://www.3donlinefilms.com/player.php?title=Life+Is+Beautiful
+https://www.3donlinefilms.com/player.php?title=The+Usual+Suspects
+https://www.3donlinefilms.com/player.php?title=Who+Framed+Roger+Rabbit
+https://www.3donlinefilms.com/player.php?title=Mickey+17
+https://www.3donlinefilms.com/player.php?title=Mufasa+The+Lion+King+
+https://www.3donlinefilms.com/player.php?title=Flow
+https://www.3donlinefilms.com/player.php?title=The+Substance
+https://www.3donlinefilms.com/player.php?title=Kingdom+of+the+Planet+of+the+Apes
+https://www.3donlinefilms.com/player.php?title=Furiosa:+A+Mad+Max+Saga
+https://www.3donlinefilms.com/player.php?title=Oppenheimer
+https://www.3donlinefilms.com/player.php?title=Spider-Man+Across+the+Spider-Verse
+https://www.3donlinefilms.com/player.php?title=Interstellar
+https://www.3donlinefilms.com/player.php?title=The+Boy+and+the+Heron
+https://www.3donlinefilms.com/player.php?title=John+Wick:+Chapter4
+https://www.3donlinefilms.com/player.php?title=Titanic
+https://www.3donlinefilms.com/player.php?title=Waterworld
+https://www.3donlinefilms.com/player.php?title=The+Snow+Queen+2
+https://www.3donlinefilms.com/player.php?title=Aladdin_1992
+https://www.3donlinefilms.com/player.php?title=Prey
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+II+Attack+of+the+Clones
+https://www.3donlinefilms.com/player.php?title=Spy+Kids+3D:+Game+Over
+https://www.3donlinefilms.com/player.php?title=The+Matrix+Revolutions
+https://www.3donlinefilms.com/player.php?title=The+Matrix+Resurrections
+https://www.3donlinefilms.com/player.php?title=John+Wick3
+https://www.3donlinefilms.com/player.php?title=Black+Adam
+https://www.3donlinefilms.com/player.php?title=The+Flash
+https://www.3donlinefilms.com/player.php?title=Austin+Powers+The+Spy+Who+Shagged+Me
+https://www.3donlinefilms.com/player.php?title=Battle+Los+Angeles
+https://www.3donlinefilms.com/player.php?title=Friday+the+13th+Part+III
+https://www.3donlinefilms.com/player.php?title=The+Suicide+Squad
+https://www.3donlinefilms.com/player.php?title=Free+Guy
+https://www.3donlinefilms.com/player.php?title=Back+to+the+Future
+https://www.3donlinefilms.com/player.php?title=Superman:+The+Movie
+https://www.3donlinefilms.com/player.php?title=V+for+Vendetta
+https://www.3donlinefilms.com/player.php?title=The+Pope+Exorcist
+https://www.3donlinefilms.com/player.php?title=A+Nightmare+on+Elm+Street
+https://www.3donlinefilms.com/player.php?title=Indiana+Jones+and+the+Dial+of+Destiny
+https://www.3donlinefilms.com/player.php?title=Zombieland:+Double+Tap
+https://www.3donlinefilms.com/player.php?title=Home+Alone
+https://www.3donlinefilms.com/player.php?title=Dunkirk
+https://www.3donlinefilms.com/player.php?title=Dungeons+and+Dragons:+Honor+Among+Thieves
+https://www.3donlinefilms.com/player.php?title=Totally+Killer
+https://www.3donlinefilms.com/player.php?title=Bohemian+Rhapsody
+https://www.3donlinefilms.com/player.php?title=Deadpool
+https://www.3donlinefilms.com/player.php?title=Independence+Day+Extended
+https://www.3donlinefilms.com/player.php?title=Chicken+Little
+https://www.3donlinefilms.com/player.php?title=Zombieland
+https://www.3donlinefilms.com/player.php?title=The+Departed
+https://www.3donlinefilms.com/player.php?title=Chappie
+https://www.3donlinefilms.com/player.php?title=The+Lost+World:+Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=Total+Recall+2012
+https://www.3donlinefilms.com/player.php?title=Space+Jam:+A+New+Legacy
+https://www.3donlinefilms.com/player.php?title=Nobody+
+https://www.3donlinefilms.com/player.php?title=Alien:+Director+Cut
+https://www.3donlinefilms.com/player.php?title=A+Hard+Day+Night
+https://www.3donlinefilms.com/player.php?title=The+Fearless+Vampire+Killers
+https://www.3donlinefilms.com/player.php?title=Drive
+https://www.3donlinefilms.com/player.php?title=Mortal
+https://www.3donlinefilms.com/player.php?title=Legion
+https://www.3donlinefilms.com/player.php?title=Alpha
+https://www.3donlinefilms.com/player.php?title=The+Hunger+Games:+The+Ballad+of+Songbirds+and+Snakes
+https://www.3donlinefilms.com/player.php?title=Final+Fantasy:+The+Spirits+Within
+https://www.3donlinefilms.com/player.php?title=Civil+War
+https://www.3donlinefilms.com/player.php?title=Stargate
+https://www.3donlinefilms.com/player.php?title=Donnie+Darko
+https://www.3donlinefilms.com/player.php?title=Braveheart+
+https://www.3donlinefilms.com/player.php?title=Akira
+https://www.3donlinefilms.com/player.php?title=Fight+Club
+https://www.3donlinefilms.com/player.php?title=Adrift
+https://www.3donlinefilms.com/player.php?title=Adar
+https://www.3donlinefilms.com/player.php?title=The+Great+Wave
+https://www.3donlinefilms.com/player.php?title=Udun
+https://www.3donlinefilms.com/player.php?title=Alloyed
+https://www.3donlinefilms.com/player.php?title=Looper
+https://www.3donlinefilms.com/player.php?title=The+Hitchhiker+Guide+to+the+Galaxy
+https://www.3donlinefilms.com/player.php?title=The+Simpsons+Movie
+https://www.3donlinefilms.com/player.php?title=Dune+Part+Two
+https://www.3donlinefilms.com/player.php?title=Ghost+in+the+Shell+1995
+https://www.3donlinefilms.com/player.php?title=Resident+Evil
+https://www.3donlinefilms.com/player.php?title=RRR
+https://www.3donlinefilms.com/player.php?title=Resident+Evil:+Apocalypse
+https://www.3donlinefilms.com/player.php?title=Scream+VI
+https://www.3donlinefilms.com/player.php?title=The+Rocky+Horror+Picture+Show
+https://www.3donlinefilms.com/player.php?title=Split
+https://www.3donlinefilms.com/player.php?title=Beetlejuice+Beetlejuice
+https://www.3donlinefilms.com/player.php?title=Ghostbusters+1984
+https://www.3donlinefilms.com/player.php?title=Alien+Covenant
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+V+The+Empire+Strikes+Back
+https://www.3donlinefilms.com/player.php?title=Edward+Scissorhands
+https://www.3donlinefilms.com/player.php?title=Scrooge+A+Christmas+Carol
+https://www.3donlinefilms.com/player.php?title=Transformers+One
+https://www.3donlinefilms.com/player.php?title=Cast+Away
+https://www.3donlinefilms.com/player.php?title=eXistenZ
+https://www.3donlinefilms.com/player.php?title=Django+Unchained
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+III+Revenge+of+the+Sith
+https://www.3donlinefilms.com/player.php?title=Resident+Evil+Extinction
+https://www.3donlinefilms.com/player.php?title=Zack+Snyders+Justice+League
+https://www.3donlinefilms.com/player.php?title=Tarzan
+https://www.3donlinefilms.com/player.php?title=Cinderella
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+IV+A+New+Hope
+https://www.3donlinefilms.com/player.php?title=Ip+Man
+https://www.3donlinefilms.com/player.php?title=Fantasia
+https://www.3donlinefilms.com/player.php?title=King+Kong
+https://www.3donlinefilms.com/player.php?title=Troy
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+VI+Return+of+the+Jedi
+https://www.3donlinefilms.com/player.php?title=Iron+Man
+https://www.3donlinefilms.com/player.php?title=Minority+Report
+https://www.3donlinefilms.com/player.php?title=Your+Name
+https://www.3donlinefilms.com/player.php?title=Shazam
+https://www.3donlinefilms.com/player.php?title=Sausage+Party
+https://www.3donlinefilms.com/player.php?title=Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=Pacific+Rim+Uprising
+https://www.3donlinefilms.com/player.php?title=Jaws+3D
+https://www.3donlinefilms.com/player.php?title=Beauty+and+the+Beast+1991
+https://www.3donlinefilms.com/player.php?title=Man+of+Steel
+https://www.3donlinefilms.com/player.php?title=Elf
+https://www.3donlinefilms.com/player.php?title=The+Exorcist
+https://www.3donlinefilms.com/player.php?title=Joker
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean:+Dead+Man+Chest
+https://www.3donlinefilms.com/player.php?title=Star+Trek+XXX+
+https://www.3donlinefilms.com/player.php?title=Final+Destination
+https://www.3donlinefilms.com/player.php?title=Scorpions+Live+in+3D
+https://www.3donlinefilms.com/player.php?title=The+Lego+Movie
+https://www.3donlinefilms.com/player.php?title=Elven+Kings+Under+the+Sky
+https://www.3donlinefilms.com/player.php?title=The+Eagle+and+the+Sceptre
+https://www.3donlinefilms.com/player.php?title=Eldest
+https://www.3donlinefilms.com/player.php?title=Halls+of+Stone
+https://www.3donlinefilms.com/player.php?title=Where+Is+He
+https://www.3donlinefilms.com/player.php?title=Doomed+to+Die
+
+
+
+https://www.3donlinefilms.com/player.php?title=Final+Destination+Bloodlines+
+https://www.3donlinefilms.com/player.php?title=Immortals
+https://www.3donlinefilms.com/player.php?title=Zombieland:+Double+Tap
+https://www.3donlinefilms.com/player.php?title=The+Final+Destination
+https://www.3donlinefilms.com/player.php?title=Final+Destination+5
+https://www.3donlinefilms.com/player.php?title=Final+Destination
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=X+Men+Dark+Phoenix
+https://www.3donlinefilms.com/player.php?title=X+Men+First+Class+
+https://www.3donlinefilms.com/player.php?title=X-Men+Apocalypse
+https://www.3donlinefilms.com/player.php?title=X-Men+Days+of+Future+Past
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Captain+America+Brave+New+World
+https://www.3donlinefilms.com/player.php?title=Black.Widow
+https://www.3donlinefilms.com/player.php?title=Eternals
+https://www.3donlinefilms.com/player.php?title=Avengers+Endgame
+https://www.3donlinefilms.com/player.php?title=Avengers+Infinity+War
+https://www.3donlinefilms.com/player.php?title=Spider-Man+Homecoming
+https://www.3donlinefilms.com/player.php?title=Ant-Man
+https://www.3donlinefilms.com/player.php?title=Avengers+Age+of+Ultron
+https://www.3donlinefilms.com/player.php?title=Captain+America+Civil+War
+https://www.3donlinefilms.com/player.php?title=The+Avengers
+
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Charlie+and+the+Chocolate+Factory
+https://www.3donlinefilms.com/player.php?title=The+Fantastic+Four:+First+Steps
+https://www.3donlinefilms.com/player.php?title=Life+Is+Beautiful
+https://www.3donlinefilms.com/player.php?title=The+Boy+and+the+Heron
+https://www.3donlinefilms.com/player.php?title=Godzilla+vs+Kong
+https://www.3donlinefilms.com/player.php?title=Fantastic+Beasts+The+Crimes+of+Grindelwald
+https://www.3donlinefilms.com/player.php?title=Battle+for+Terra
+https://www.3donlinefilms.com/player.php?title=Fantastic+Beasts:+The+Secrets+of+Dumbledore
+https://www.3donlinefilms.com/player.php?title=Fantastic+Beasts+and+Where+to+Find+Them
+https://www.3donlinefilms.com/player.php?title=Ready++Player+One
+https://www.3donlinefilms.com/player.php?title=Beauty+and+the+Beast+1991
+https://www.3donlinefilms.com/player.php?title=Lichtmond+3+Days+of+Eternity
+https://www.3donlinefilms.com/player.php?title=Coraline
+https://www.3donlinefilms.com/player.php?title=The+Book+of+Life
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Dune
+https://www.3donlinefilms.com/player.php?title=Dune+Part+Two
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Godzilla+x+Kong+The+New+Empire
+https://www.3donlinefilms.com/player.php?title=Godzilla+Minus+One
+https://www.3donlinefilms.com/player.php?title=Godzilla+vs+Kong
+https://www.3donlinefilms.com/player.php?title=Godzilla+King+of+the+Monsters
+https://www.3donlinefilms.com/player.php?title=Godzilla
+
+
+https://www.3donlinefilms.com/player.php?title=Godzilla+x+Kong+The+New+Empire
+https://www.3donlinefilms.com/player.php?title=Godzilla+vs+Kong
+https://www.3donlinefilms.com/player.php?title=King+Kong
+https://www.3donlinefilms.com/player.php?title=Skyscraper
+https://www.3donlinefilms.com/player.php?title=Kong:+Skull+Island
+https://www.3donlinefilms.com/player.php?title=Pixels
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Kingdom+of+the+Planet+of+the+Apes
+https://www.3donlinefilms.com/player.php?title=Dawn+of+the+Planet+of+the+Apes
+https://www.3donlinefilms.com/player.php?title=War+for+the+Planet+of+the+Apes
+https://www.3donlinefilms.com/player.php?title=Elysium
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Deathly+Hallows:+Part+2
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Deathly+Hallows:+Part+1
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Half+Blood+Prince
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Order+of+the+Phoenix
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Goblet+of+Fire
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Prisoner+of+Azkaban
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Chamber+of+Secrets
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Sorcerer+Stone
+https://www.3donlinefilms.com/player.php?title=Fantastic+Beasts+and+Where+to+Find+Them
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Men+in+Black+3
+
+
+
+
+
+https://www.3donlinefilms.com/player.php?title=Spider-Man+Across+the+Spider-Verse
+https://www.3donlinefilms.com/player.php?title=Spider-Man:+No+Way+Home
+https://www.3donlinefilms.com/player.php?title=Doctor+Strange+in+the+Multiverse+of+Madness
+https://www.3donlinefilms.com/player.php?title=The+Simpsons+Movie
+https://www.3donlinefilms.com/player.php?title=SpiderMan+Far+from+Home
+https://www.3donlinefilms.com/player.php?title=Spiderman+into+the+Spiderverse
+https://www.3donlinefilms.com/player.php?title=Cloudy+with+a+Chance+of+MeatballsII
+https://www.3donlinefilms.com/player.php?title=The+Amazing+Spider-Man
+https://www.3donlinefilms.com/player.php?title=Spider-Man+Homecoming
+https://www.3donlinefilms.com/player.php?title=The+Amazing+SpiderMan+2
+https://www.3donlinefilms.com/player.php?title=The+Eagle+and+the+Sceptre
+
+
+https://www.3donlinefilms.com/player.php?title=The+Fantastic+Four:+First+Steps
+
+
+
+https://www.3donlinefilms.com/player.php?title=Deadpool+and+Wolverine
+https://www.3donlinefilms.com/player.php?title=The+Wolwerine
+
+================================================================================
+FILE: G:\My Drive\Official Data\Divyansh\3D Online Script\getmoviebylink.py
+================================================================================
+
+import os
+from urllib.parse import urljoin
+from bs4 import BeautifulSoup
+import requests
+
+# --- CONFIGURATION ---
+BASE_URL = "https://www.3donlinefilms.com"
+SEARCH_URL_MAIN = "https://www.3donlinefilms.com/home"
+FILE_PATH = "all3dmovies.txt"
+
+
+def load_existing_movies(file_path):
+    """Reads existing URLs from the file to prevent duplicates and find new additions."""
+    if not os.path.exists(file_path):
+        return set()
+
+    print(f"[~] Loading existing movies from {file_path}...")
+    with open(file_path, "r", encoding="utf-8") as f:
+        # Read lines, strip whitespace, and filter out empty lines
+        return {line.strip() for line in f if line.strip()}
+
+
+def get_player_urls(existing_urls):
+    """Scrapes the pages and yields ONLY URLs that aren't in the existing text file."""
+    print(f"[~] Crawling directory for: {SEARCH_URL_MAIN}")
+    new_urls = []
+    seen_this_session = set()
+    page_num = 0
+
+    while True:
+        # Construct the paginated URL
+        search_url = f"{SEARCH_URL_MAIN.rstrip('/')}/page/{page_num}/"
+        print(f"[~] Fetching page: {search_url}")
+        try:
+            response = requests.get(
+                search_url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                },
+                timeout=20,
+            )
+            if response.status_code != 200:
+                break
+        except Exception:
+            break
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        widget_main = soup.select_one("div.widget.main")
+
+        # If the expected container isn't found, stop crawling
+        if not widget_main:
+            break
+
+        page_links_found = False
+
+        # Extract the anchor tags targeting the movie page URLs
+        for a in widget_main.select('a[href*="/player.php?title="]'):
+            href = a.get("href")
+            if not href:
+                continue
+
+            full_url = urljoin(BASE_URL, href)
+
+            # Skip empty or broken title queries
+            if full_url == f"{BASE_URL}/player.php?title=":
+                continue
+
+            # Check against local file database and current session cache
+            if (
+                full_url not in existing_urls
+                and full_url not in seen_this_session
+            ):
+                seen_this_session.add(full_url)
+                new_urls.append(full_url)
+                page_links_found = True
+            elif full_url in existing_urls:
+                # If we encounter an old link, we flag that we found links on the page,
+                # but we don't save it as a new movie.
+                page_links_found = True
+
+        # If absolutely no valid movie layout links are found on this pagination, stop
+        if not page_links_found:
+            break
+
+        page_num += 1
+
+    return new_urls
+
+
+def save_new_movies(file_path, new_urls):
+    """Appends newly discovered movie URLs to the text file."""
+    if not new_urls:
+        return
+    with open(file_path, "a", encoding="utf-8") as f:
+        for url in new_urls:
+            f.write(url + "\n")
+    print(f"[+] Successfully appended {len(new_urls)} new URLs to {file_path}")
+
+
+if __name__ == "__main__":
+    # 1. Load what we already have
+    old_movies = load_existing_movies(FILE_PATH)
+
+    # 2. Extract only the newly published movie URLs
+    new_movies = get_player_urls(old_movies)
+
+    # 3. Print the differences directly to your log
+    print("\n" + "=" * 60)
+    print(f" LOG DIFFERENCE REPORT: {len(new_movies)} NEW MOVIES FOUND")
+    print("=" * 60)
+
+    if new_movies:
+        for url in new_movies:
+            print(f"[NEW] {url}")
+        print("-" * 60)
+
+        # 4. Optional: Update your master database file so they aren't 'new' next run
+        save_new_movies(FILE_PATH, new_movies)
+    else:
+        print("[i] No new items discovered. Everything is up to date.")
+        print("-" * 60)
+
+================================================================================
+FILE: G:\My Drive\Official Data\Divyansh\3D Online Script\all3dmovies.txt
+================================================================================
+
+https://www.3donlinefilms.com/player.php?title=The+Shining:+Director+Cut
+https://www.3donlinefilms.com/player.php?title=Mercy
+https://www.3donlinefilms.com/player.php?title=The+Princess+Bride
+https://www.3donlinefilms.com/player.php?title=Journey+2+The+Mysterious+Island
+https://www.3donlinefilms.com/player.php?title=Avatar:+Fire+and+Ash
+https://www.3donlinefilms.com/player.php?title=Legend
+https://www.3donlinefilms.com/player.php?title=Doomed+to+Die
+https://www.3donlinefilms.com/player.php?title=Titanic
+https://www.3donlinefilms.com/player.php?title=Sanctum
+https://www.3donlinefilms.com/player.php?title=SpiderMan+Far+from+Home
+https://www.3donlinefilms.com/player.php?title=Elysium
+https://www.3donlinefilms.com/player.php?title=The+Princess+and+the+Frog
+https://www.3donlinefilms.com/player.php?title=Resident+Evil:+Apocalypse
+https://www.3donlinefilms.com/player.php?title=Death+Proof
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Deathly+Hallows:+Part+1
+https://www.3donlinefilms.com/player.php?title=Project+Hail+Mary
+https://www.3donlinefilms.com/player.php?title=The+Boss+Baby
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Deathly+Hallows:+Part+2
+https://www.3donlinefilms.com/player.php?title=The+Thing
+https://www.3donlinefilms.com/player.php?title=Rampage
+https://www.3donlinefilms.com/player.php?title=Battlestar+Galactica:+Blood+and+Chrome
+https://www.3donlinefilms.com/player.php?title=Mortal+Kombat
+https://www.3donlinefilms.com/player.php?title=Halloween
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean:+Dead+Man+Chest
+https://www.3donlinefilms.com/player.php?title=Mad+Max.+Fury+Road
+https://www.3donlinefilms.com/player.php?title=Constantine
+https://www.3donlinefilms.com/player.php?title=Moonwalker
+https://www.3donlinefilms.com/player.php?title=The+Good+Dinosaur
+https://www.3donlinefilms.com/player.php?title=The+Marvels
+https://www.3donlinefilms.com/player.php?title=Despicable+Me
+https://www.3donlinefilms.com/player.php?title=UP
+https://www.3donlinefilms.com/player.php?title=Dawn+of+the+Planet+of+the+Apes
+https://www.3donlinefilms.com/player.php?title=Partings
+https://www.3donlinefilms.com/player.php?title=It+is+a+Wonderful+Life
+https://www.3donlinefilms.com/player.php?title=Godzilla+x+Kong+The+New+Empire
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+V+The+Empire+Strikes+Back
+https://www.3donlinefilms.com/player.php?title=Cinderella
+https://www.3donlinefilms.com/player.php?title=Mulan
+https://www.3donlinefilms.com/player.php?title=Aquaman+and+The+Lost+Kingdom
+https://www.3donlinefilms.com/player.php?title=Django+Unchained
+https://www.3donlinefilms.com/player.php?title=Final+Destination
+https://www.3donlinefilms.com/player.php?title=Jurassic+Park
+https://www.3donlinefilms.com/player.php?title=Friday+the+13th+Part+III
+https://www.3donlinefilms.com/player.php?title=Edward+Scissorhands
+https://www.3donlinefilms.com/player.php?title=Leap
+https://www.3donlinefilms.com/player.php?title=Cars+2
+https://www.3donlinefilms.com/player.php?title=Terminator+Genisys
+https://www.3donlinefilms.com/player.php?title=Tangled
+https://www.3donlinefilms.com/player.php?title=Justice+League
+https://www.3donlinefilms.com/player.php?title=A+Quiet+Place
+https://www.3donlinefilms.com/player.php?title=Free+Preview+Sample
+https://www.3donlinefilms.com/player.php?title=Harlock:+Space+Pirate
+https://www.3donlinefilms.com/player.php?title=Forbidden+Empire
+https://www.3donlinefilms.com/player.php?title=The+LEGO+Ninjago+Movie
+https://www.3donlinefilms.com/player.php?title=Inside+Out
+https://www.3donlinefilms.com/player.php?title=Deadpool+and+Wolverine
+https://www.3donlinefilms.com/player.php?title=Legion
+https://www.3donlinefilms.com/player.php?title=Superman
+https://www.3donlinefilms.com/player.php?title=Full+Metal+Jacket
+https://www.3donlinefilms.com/player.php?title=Noah
+https://www.3donlinefilms.com/player.php?title=Avatar:+The+Way+of+Water+Part+two
+https://www.3donlinefilms.com/player.php?title=Alloyed
+https://www.3donlinefilms.com/player.php?title=Epic
+https://www.3donlinefilms.com/player.php?title=Elven+Kings+Under+the+Sky
+https://www.3donlinefilms.com/player.php?title=Back+to+the+Future
+https://www.3donlinefilms.com/player.php?title=Abraham+Lincoln+Vampire+Hunter
+https://www.3donlinefilms.com/player.php?title=The+Super+Mario+Bros+Movie
+https://www.3donlinefilms.com/player.php?title=Jumanji:+The+Next+Level
+https://www.3donlinefilms.com/player.php?title=Thor+The+Dark+World
+https://www.3donlinefilms.com/player.php?title=The+Hobbit+The+Desolation+of+Smaug
+https://www.3donlinefilms.com/player.php?title=Black+Adam
+https://www.3donlinefilms.com/player.php?title=Ant-Man+and+The+Wasp:+Quantumania
+https://www.3donlinefilms.com/player.php?title=My+Bloody+Valentine
+https://www.3donlinefilms.com/player.php?title=Spiderman+into+the+Spiderverse
+https://www.3donlinefilms.com/player.php?title=The+Boss+Baby:+Family+Business
+https://www.3donlinefilms.com/player.php?title=Top+Gun+Maverick
+https://www.3donlinefilms.com/player.php?title=Mortal+Engines
+https://www.3donlinefilms.com/player.php?title=Cirque+du+Soleil+Journey+of+Man
+https://www.3donlinefilms.com/player.php?title=Dune+Part+Two
+https://www.3donlinefilms.com/player.php?title=Totally+Killer
+https://www.3donlinefilms.com/player.php?title=House+of+Wax
+https://www.3donlinefilms.com/player.php?title=Incredibles2
+https://www.3donlinefilms.com/player.php?title=Shazam
+https://www.3donlinefilms.com/player.php?title=Thor
+https://www.3donlinefilms.com/player.php?title=V+for+Vendetta
+https://www.3donlinefilms.com/player.php?title=Flow
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+I+The+Phantom+Menace
+https://www.3donlinefilms.com/player.php?title=Maleficent+Mistress+of+Evil
+https://www.3donlinefilms.com/player.php?title=Saw+X
+https://www.3donlinefilms.com/player.php?title=The+Voyage+of+the+Dawn+Treader
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda+4
+https://www.3donlinefilms.com/player.php?title=Independence+Day+Resurgence
+https://www.3donlinefilms.com/player.php?title=Ice+Age+Collision+Course
+https://www.3donlinefilms.com/player.php?title=Final+Fantasy:+The+Spirits+Within
+https://www.3donlinefilms.com/player.php?title=Seventh+Son
+https://www.3donlinefilms.com/player.php?title=War+for+the+Planet+of+the+Apes
+https://www.3donlinefilms.com/player.php?title=Toy+Story
+https://www.3donlinefilms.com/player.php?title=9
+https://www.3donlinefilms.com/player.php?title=Asterix+The+Mansions+of+the+Gods
+https://www.3donlinefilms.com/player.php?title=Avatar:+The+Way+of+Water+Part+one
+https://www.3donlinefilms.com/player.php?title=Sin+City+2
+https://www.3donlinefilms.com/player.php?title=King+Arthur+Legend+of+the+Sword
+https://www.3donlinefilms.com/player.php?title=Indiana+Jones+and+the+Dial+of+Destiny
+https://www.3donlinefilms.com/player.php?title=Storks
+https://www.3donlinefilms.com/player.php?title=Mickey+17
+https://www.3donlinefilms.com/player.php?title=The+Adventures+of+Tintin
+https://www.3donlinefilms.com/player.php?title=Boogie+
+https://www.3donlinefilms.com/player.php?title=Alice+in+Wonderland+1951
+https://www.3donlinefilms.com/player.php?title=Thor+Love+and+Thunder
+https://www.3donlinefilms.com/player.php?title=Labyrinth
+https://www.3donlinefilms.com/player.php?title=The+Bourne+Identity
+https://www.3donlinefilms.com/player.php?title=Guardians+of+the+Galaxy
+https://www.3donlinefilms.com/player.php?title=Transformers+Age+of+Extinction
+https://www.3donlinefilms.com/player.php?title=The+Pope+Exorcist
+https://www.3donlinefilms.com/player.php?title=Prey
+https://www.3donlinefilms.com/player.php?title=The+Jungle+Book
+https://www.3donlinefilms.com/player.php?title=The+Matrix
+https://www.3donlinefilms.com/player.php?title=Big+Hero+6
+https://www.3donlinefilms.com/player.php?title=The+Meg
+https://www.3donlinefilms.com/player.php?title=Hotel+Transylvania+2
+https://www.3donlinefilms.com/player.php?title=Men+in+Black+3
+https://www.3donlinefilms.com/player.php?title=Lightyear
+https://www.3donlinefilms.com/player.php?title=Migration+
+https://www.3donlinefilms.com/player.php?title=The+City+of+Lost+Children
+https://www.3donlinefilms.com/player.php?title=Cloudy+with+a+Chance+of+Meatballs
+https://www.3donlinefilms.com/player.php?title=Aladdin_1992
+https://www.3donlinefilms.com/player.php?title=The+Huntsman+Winter+War
+https://www.3donlinefilms.com/player.php?title=Wonder+Woman+1984
+https://www.3donlinefilms.com/player.php?title=Fright+Night
+https://www.3donlinefilms.com/player.php?title=Transformers+Dark+of+the+Moon
+https://www.3donlinefilms.com/player.php?title=The+Lego+Movie
+https://www.3donlinefilms.com/player.php?title=Spider-Man+Across+the+Spider-Verse
+https://www.3donlinefilms.com/player.php?title=Mad+God
+https://www.3donlinefilms.com/player.php?title=Resident+Evil
+https://www.3donlinefilms.com/player.php?title=Sing2
+https://www.3donlinefilms.com/player.php?title=Captain+America+Brave+New+World
+https://www.3donlinefilms.com/player.php?title=Terminator2
+https://www.3donlinefilms.com/player.php?title=Black.Widow
+https://www.3donlinefilms.com/player.php?title=Eternals
+https://www.3donlinefilms.com/player.php?title=Dragon+Blade
+https://www.3donlinefilms.com/player.php?title=Sinners
+https://www.3donlinefilms.com/player.php?title=Sleeping+Beauty
+https://www.3donlinefilms.com/player.php?title=Udun
+https://www.3donlinefilms.com/player.php?title=Alien+Covenant
+https://www.3donlinefilms.com/player.php?title=Cars+3
+https://www.3donlinefilms.com/player.php?title=Predator
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda+3
+https://www.3donlinefilms.com/player.php?title=300+Rise+of+an+Empire
+https://www.3donlinefilms.com/player.php?title=Cars
+https://www.3donlinefilms.com/player.php?title=A+Shadow+of+the+Past
+https://www.3donlinefilms.com/player.php?title=Life+of+Pi
+https://www.3donlinefilms.com/player.php?title=Clash+of+the+Titans
+https://www.3donlinefilms.com/player.php?title=Gravity
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Prisoner+of+Azkaban
+https://www.3donlinefilms.com/player.php?title=Ghostbusters+1984
+https://www.3donlinefilms.com/player.php?title=Braveheart+
+https://www.3donlinefilms.com/player.php?title=Tron:+Ares
+https://www.3donlinefilms.com/player.php?title=Alien+Romulus
+https://www.3donlinefilms.com/player.php?title=Despicable+Me3
+https://www.3donlinefilms.com/player.php?title=Abominable
+https://www.3donlinefilms.com/player.php?title=Jaws+3D
+https://www.3donlinefilms.com/player.php?title=Maleficent
+https://www.3donlinefilms.com/player.php?title=Beetlejuice+Beetlejuice
+https://www.3donlinefilms.com/player.php?title=Mission+Impossible:+Fallout
+https://www.3donlinefilms.com/player.php?title=Gremlins
+https://www.3donlinefilms.com/player.php?title=Meg+2:+The+Trench
+https://www.3donlinefilms.com/player.php?title=Good+Luck+Have+Fun+Dont+Die
+https://www.3donlinefilms.com/player.php?title=Enemy+Mine
+https://www.3donlinefilms.com/player.php?title=Journey+to+the+Center+of+the+Earth
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+IV+A+New+Hope
+https://www.3donlinefilms.com/player.php?title=Trolls+World+Tour
+https://www.3donlinefilms.com/player.php?title=Looper
+https://www.3donlinefilms.com/player.php?title=RRR
+https://www.3donlinefilms.com/player.php?title=The+Secret+Life+of+Pets2
+https://www.3donlinefilms.com/player.php?title=Megamind
+https://www.3donlinefilms.com/player.php?title=Soul
+https://www.3donlinefilms.com/player.php?title=FrozenII
+https://www.3donlinefilms.com/player.php?title=One+Battle+After+Another
+https://www.3donlinefilms.com/player.php?title=Alice+in+Wonderland
+https://www.3donlinefilms.com/player.php?title=Dolphin+Tale
+https://www.3donlinefilms.com/player.php?title=Sin+City
+https://www.3donlinefilms.com/player.php?title=Onward
+https://www.3donlinefilms.com/player.php?title=The+Usual+Suspects
+https://www.3donlinefilms.com/player.php?title=Civil+War
+https://www.3donlinefilms.com/player.php?title=Underworld+Evolution
+https://www.3donlinefilms.com/player.php?title=Monsters+University
+https://www.3donlinefilms.com/player.php?title=Adrift
+https://www.3donlinefilms.com/player.php?title=Underworld+Awakening
+https://www.3donlinefilms.com/player.php?title=Stargate
+https://www.3donlinefilms.com/player.php?title=Metallica:+Through+the+Never
+https://www.3donlinefilms.com/player.php?title=Priest
+https://www.3donlinefilms.com/player.php?title=Borderlands
+https://www.3donlinefilms.com/player.php?title=VenomI
+https://www.3donlinefilms.com/player.php?title=Shrek+Forever+After
+https://www.3donlinefilms.com/player.php?title=John+Wick
+https://www.3donlinefilms.com/player.php?title=Zombieland
+https://www.3donlinefilms.com/player.php?title=A+Turtle+Tale:+Sammy+Adventures
+https://www.3donlinefilms.com/player.php?title=The+Simpsons+Movie
+https://www.3donlinefilms.com/player.php?title=Sleepy+Hollow
+https://www.3donlinefilms.com/player.php?title=Transformers:+Rise+of+the+Beasts
+https://www.3donlinefilms.com/player.php?title=The+Lord+of+the+Rings:+The+Fellowship+of+the+Ring
+https://www.3donlinefilms.com/player.php?title=The+Lord+of+the+Rings:+The+Two+Towers+
+https://www.3donlinefilms.com/player.php?title=Chicken+Little
+https://www.3donlinefilms.com/player.php?title=Avatar+ExtendedVersion
+https://www.3donlinefilms.com/player.php?title=Scorpions+Live+in+3D
+https://www.3donlinefilms.com/player.php?title=Avengers+Infinity+War
+https://www.3donlinefilms.com/player.php?title=Transformers5
+https://www.3donlinefilms.com/player.php?title=Pan
+https://www.3donlinefilms.com/player.php?title=Warcraft
+https://www.3donlinefilms.com/player.php?title=The+Shawshank+Redemption
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Goblet+of+Fire
+https://www.3donlinefilms.com/player.php?title=Predator:+Killer+of+Killers
+https://www.3donlinefilms.com/player.php?title=Hacksaw+Ridge
+https://www.3donlinefilms.com/player.php?title=Captain+America:+The+First+Avenger
+https://www.3donlinefilms.com/player.php?title=Resident+Evil+-+The+Final+Chapter
+https://www.3donlinefilms.com/player.php?title=Ratatouille
+https://www.3donlinefilms.com/player.php?title=Sausage+Party
+https://www.3donlinefilms.com/player.php?title=Life+Is+Beautiful
+https://www.3donlinefilms.com/player.php?title=Flesh+for+Frankenstein
+https://www.3donlinefilms.com/player.php?title=Jumanji1
+https://www.3donlinefilms.com/player.php?title=Eldest
+https://www.3donlinefilms.com/player.php?title=Coraline
+https://www.3donlinefilms.com/player.php?title=How+the+Grinch+Stole+Christmas
+https://www.3donlinefilms.com/player.php?title=From+Dusk+Till+Dawn
+https://www.3donlinefilms.com/player.php?title=Passengers
+https://www.3donlinefilms.com/player.php?title=Bohemian+Rhapsody
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda
+https://www.3donlinefilms.com/player.php?title=Jurassic+World
+https://www.3donlinefilms.com/player.php?title=Your+Name
+https://www.3donlinefilms.com/player.php?title=Shrek+the+Third
+https://www.3donlinefilms.com/player.php?title=Resident+Evil+Damnation
+https://www.3donlinefilms.com/player.php?title=Raya+and+the+Last+Dragon
+https://www.3donlinefilms.com/player.php?title=Godzilla+vs+Kong
+https://www.3donlinefilms.com/player.php?title=Ip+Man
+https://www.3donlinefilms.com/player.php?title=Elio
+https://www.3donlinefilms.com/player.php?title=Saw+3D+The+Final+Chapter
+https://www.3donlinefilms.com/player.php?title=Gremlins+2:+The+New+Batch
+https://www.3donlinefilms.com/player.php?title=The+Fantastic+Four:+First+Steps
+https://www.3donlinefilms.com/player.php?title=The+Creator
+https://www.3donlinefilms.com/player.php?title=Despicable+Me+2
+https://www.3donlinefilms.com/player.php?title=Zootopia+2
+https://www.3donlinefilms.com/player.php?title=Robinson+Crusoe
+https://www.3donlinefilms.com/player.php?title=Everything+Everywhere+All+at+Once
+https://www.3donlinefilms.com/player.php?title=Gladiator+II
+https://www.3donlinefilms.com/player.php?title=The+Matrix+Revolutions
+https://www.3donlinefilms.com/player.php?title=Oblivion
+https://www.3donlinefilms.com/player.php?title=Chappie
+https://www.3donlinefilms.com/player.php?title=A+Quiet+Place+Day+One
+https://www.3donlinefilms.com/player.php?title=Tomb+Raider
+https://www.3donlinefilms.com/player.php?title=ToyStory3
+https://www.3donlinefilms.com/player.php?title=Ant-Man
+https://www.3donlinefilms.com/player.php?title=Mission+Impossible+Dead+Reckoning+Part+One
+https://www.3donlinefilms.com/player.php?title=Aquaman
+https://www.3donlinefilms.com/player.php?title=Cast+Away
+https://www.3donlinefilms.com/player.php?title=Hotel+Transylvania+3+Summer+Vacation
+https://www.3donlinefilms.com/player.php?title=Life+of+Brian
+https://www.3donlinefilms.com/player.php?title=The+Bad+Guys+2
+https://www.3donlinefilms.com/player.php?title=Alita+Battle+Angel
+https://www.3donlinefilms.com/player.php?title=Billy+Lynn+Long+Halftime+Walk
+https://www.3donlinefilms.com/player.php?title=Dark+Country
+https://www.3donlinefilms.com/player.php?title=Poor+Things
+https://www.3donlinefilms.com/player.php?title=The+Walk
+https://www.3donlinefilms.com/player.php?title=ParaNorman
+https://www.3donlinefilms.com/player.php?title=The+Grinch
+https://www.3donlinefilms.com/player.php?title=Donnie+Darko
+https://www.3donlinefilms.com/player.php?title=Edge+of+Tomorrow
+https://www.3donlinefilms.com/player.php?title=The+Rocky+Horror+Picture+Show
+https://www.3donlinefilms.com/player.php?title=Doctor+Strange
+https://www.3donlinefilms.com/player.php?title=Lilo+and+Stitch
+https://www.3donlinefilms.com/player.php?title=The+Polar+Express
+https://www.3donlinefilms.com/player.php?title=Coco
+https://www.3donlinefilms.com/player.php?title=Independence+Day+Extended
+https://www.3donlinefilms.com/player.php?title=The+NeverEnding+Story
+https://www.3donlinefilms.com/player.php?title=Despicable+Me+4
+https://www.3donlinefilms.com/player.php?title=Toy+Story4
+https://www.3donlinefilms.com/player.php?title=The+Dark+Knight+Rises
+https://www.3donlinefilms.com/player.php?title=John+Carter
+https://www.3donlinefilms.com/player.php?title=Point+Break
+https://www.3donlinefilms.com/player.php?title=Alice+Through+the+Looking+Glass
+https://www.3donlinefilms.com/player.php?title=Vanilla+Sky
+https://www.3donlinefilms.com/player.php?title=Puss+in+Boots
+https://www.3donlinefilms.com/player.php?title=The+Substance
+https://www.3donlinefilms.com/player.php?title=Dunkirk
+https://www.3donlinefilms.com/player.php?title=Teenage+Mutant+Ninja+Turtles:+Mutant+Mayhem
+https://www.3donlinefilms.com/player.php?title=Star+Trek+Into+Darkness
+https://www.3donlinefilms.com/player.php?title=The+Thirteenth+Floor
+https://www.3donlinefilms.com/player.php?title=Gladiator
+https://www.3donlinefilms.com/player.php?title=Bumblebee
+https://www.3donlinefilms.com/player.php?title=Nosferatu+Extended+Cut
+https://www.3donlinefilms.com/player.php?title=Puss+in+Boots:+The+Last+Wish
+https://www.3donlinefilms.com/player.php?title=28+Years+Later
+https://www.3donlinefilms.com/player.php?title=Captain+America+Civil+War
+https://www.3donlinefilms.com/player.php?title=Jack+the+Giant+Slayer
+https://www.3donlinefilms.com/player.php?title=Batman+Begins
+https://www.3donlinefilms.com/player.php?title=Die+Hard
+https://www.3donlinefilms.com/player.php?title=Austin+Powers+The+Spy+Who+Shagged+Me
+https://www.3donlinefilms.com/player.php?title=Ralph+BreakstheInternet
+https://www.3donlinefilms.com/player.php?title=South+Park:+Bigger,+Longer+and+Uncut
+https://www.3donlinefilms.com/player.php?title=Beowulf
+https://www.3donlinefilms.com/player.php?title=Wicked
+https://www.3donlinefilms.com/player.php?title=RIPD
+https://www.3donlinefilms.com/player.php?title=Black+Panther:+Wakanda+Forever
+https://www.3donlinefilms.com/player.php?title=The+Hunger+Games:+The+Ballad+of+Songbirds+and+Snakes
+https://www.3donlinefilms.com/player.php?title=The+Fearless+Vampire+Killers
+https://www.3donlinefilms.com/player.php?title=Tarzan
+https://www.3donlinefilms.com/player.php?title=John+Wick3
+https://www.3donlinefilms.com/player.php?title=Alpha
+https://www.3donlinefilms.com/player.php?title=X+Men+Dark+Phoenix
+https://www.3donlinefilms.com/player.php?title=X-Men+Days+of+Future+Past
+https://www.3donlinefilms.com/player.php?title=X+Men+First+Class+
+https://www.3donlinefilms.com/player.php?title=The+Eye
+https://www.3donlinefilms.com/player.php?title=PiratesoftheCaribbean5
+https://www.3donlinefilms.com/player.php?title=Until+Dawn
+https://www.3donlinefilms.com/player.php?title=The+Little+Mermaid+1989
+https://www.3donlinefilms.com/player.php?title=Frankenweenie
+https://www.3donlinefilms.com/player.php?title=Monster+Family
+https://www.3donlinefilms.com/player.php?title=Mufasa+The+Lion+King+
+https://www.3donlinefilms.com/player.php?title=Minions:+The+Rise+of+Gru
+https://www.3donlinefilms.com/player.php?title=Fantastic+Beasts+and+Where+to+Find+Them
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Sorcerer+Stone
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Chamber+of+Secrets
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Order+of+the+Phoenix
+https://www.3donlinefilms.com/player.php?title=Harry+Potter+and+the+Half+Blood+Prince
+https://www.3donlinefilms.com/player.php?title=GI+Joe+Retaliation
+https://www.3donlinefilms.com/player.php?title=Cirque+du+Soleil+Worlds+Away
+https://www.3donlinefilms.com/player.php?title=The+Book+of+Life
+https://www.3donlinefilms.com/player.php?title=Moana
+https://www.3donlinefilms.com/player.php?title=Tenet
+https://www.3donlinefilms.com/player.php?title=Lichtmond
+https://www.3donlinefilms.com/player.php?title=Who+Framed+Roger+Rabbit
+https://www.3donlinefilms.com/player.php?title=Fast+X
+https://www.3donlinefilms.com/player.php?title=Drive+Angry
+https://www.3donlinefilms.com/player.php?title=Blade+Runner:+The+Final+Cut
+https://www.3donlinefilms.com/player.php?title=X-Men+Apocalypse
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean:+The+Curse+of+the+Black+Pearl
+https://www.3donlinefilms.com/player.php?title=Final+Destination+Bloodlines+
+https://www.3donlinefilms.com/player.php?title=Where+the+Stars+are+Strange
+https://www.3donlinefilms.com/player.php?title=Demon+Slayer:+Kimetsu+no+Yaiba+Infinity+Castle
+https://www.3donlinefilms.com/player.php?title=The+Prestige
+https://www.3donlinefilms.com/player.php?title=Black+Panther
+https://www.3donlinefilms.com/player.php?title=Wreck+It+Ralph
+https://www.3donlinefilms.com/player.php?title=Split
+https://www.3donlinefilms.com/player.php?title=Dumbo
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean:+At+World+End
+https://www.3donlinefilms.com/player.php?title=Ready++Player+One
+https://www.3donlinefilms.com/player.php?title=Tron+Legacy
+https://www.3donlinefilms.com/player.php?title=Mafia+Survival+Game
+https://www.3donlinefilms.com/player.php?title=Kung+Fu+Panda2
+https://www.3donlinefilms.com/player.php?title=Shadow+and+Flame
+https://www.3donlinefilms.com/player.php?title=Poltergeist
+https://www.3donlinefilms.com/player.php?title=Jurassic+World:+Rebirth
+https://www.3donlinefilms.com/player.php?title=The+Great+Wall
+https://www.3donlinefilms.com/player.php?title=The+Lion+King2019
+https://www.3donlinefilms.com/player.php?title=The+Hobbit+An+Unexpected+Journey
+https://www.3donlinefilms.com/player.php?title=Toy+Story2
+https://www.3donlinefilms.com/player.php?title=Cloudy+with+a+Chance+of+MeatballsII
+https://www.3donlinefilms.com/player.php?title=John+Wick:+Chapter4
+https://www.3donlinefilms.com/player.php?title=Honey+I+Shrunk+the+Kids
+https://www.3donlinefilms.com/player.php?title=Ballerina
+https://www.3donlinefilms.com/player.php?title=Adar
+https://www.3donlinefilms.com/player.php?title=Weird+Science
+https://www.3donlinefilms.com/player.php?title=Home+Alone
+https://www.3donlinefilms.com/player.php?title=Amityville+3D
+https://www.3donlinefilms.com/player.php?title=The+Hitchhiker+Guide+to+the+Galaxy
+https://www.3donlinefilms.com/player.php?title=The+Day+After+Tomorrow
+https://www.3donlinefilms.com/player.php?title=Pokemon+Detective+Pikachu
+https://www.3donlinefilms.com/player.php?title=Real+Steel
+https://www.3donlinefilms.com/player.php?title=Furiosa:+A+Mad+Max+Saga
+https://www.3donlinefilms.com/player.php?title=The+Angry+Birds+Movie
+https://www.3donlinefilms.com/player.php?title=A+Hard+Day+Night
+https://www.3donlinefilms.com/player.php?title=Aliens+vs.+Predator
+https://www.3donlinefilms.com/player.php?title=The+Wild+Robot
+https://www.3donlinefilms.com/player.php?title=Waterworld
+https://www.3donlinefilms.com/player.php?title=Resident+Evil+Afterlife
+https://www.3donlinefilms.com/player.php?title=Thor+-+Ragnarok
+https://www.3donlinefilms.com/player.php?title=Walking+with+Dinosaurs
+https://www.3donlinefilms.com/player.php?title=The+Wizard+of+Oz
+https://www.3donlinefilms.com/player.php?title=Underworld+-+Blood+Wars
+https://www.3donlinefilms.com/player.php?title=Alien:+Director+Cut
+https://www.3donlinefilms.com/player.php?title=Superman:+The+Movie
+https://www.3donlinefilms.com/player.php?title=Joker
+https://www.3donlinefilms.com/player.php?title=The+Avengers
+https://www.3donlinefilms.com/player.php?title=Captain+Marvel2019
+https://www.3donlinefilms.com/player.php?title=Avengers+Age+of+Ultron
+https://www.3donlinefilms.com/player.php?title=Ant-Man+and+the+Wasp
+https://www.3donlinefilms.com/player.php?title=Jupiter+Ascending
+https://www.3donlinefilms.com/player.php?title=Avengers+Endgame
+https://www.3donlinefilms.com/player.php?title=Iron+Man
+https://www.3donlinefilms.com/player.php?title=Deadpool
+https://www.3donlinefilms.com/player.php?title=Shang-Chi+and+the+Legend+of+the+Ten+Rings
+https://www.3donlinefilms.com/player.php?title=Captain+America+The+Winter+Soldier
+https://www.3donlinefilms.com/player.php?title=Iron+Man+3
+https://www.3donlinefilms.com/player.php?title=Doctor+Strange+in+the+Multiverse+of+Madness
+https://www.3donlinefilms.com/player.php?title=Spider-Man:+No+Way+Home
+https://www.3donlinefilms.com/player.php?title=Guardians+of+the+Galaxy+Vol+III
+https://www.3donlinefilms.com/player.php?title=Venom+The+Last+Dance
+https://www.3donlinefilms.com/player.php?title=Thunderbolts
+https://www.3donlinefilms.com/player.php?title=Deadpool+2
+https://www.3donlinefilms.com/player.php?title=Conan+the+Barbarian
+https://www.3donlinefilms.com/player.php?title=Kubo+and+the+Two+Strings
+https://www.3donlinefilms.com/player.php?title=Bring+Her+Back+
+https://www.3donlinefilms.com/player.php?title=Need+for+Speed
+https://www.3donlinefilms.com/player.php?title=A+Nightmare+on+Elm+Street
+https://www.3donlinefilms.com/player.php?title=Sing
+https://www.3donlinefilms.com/player.php?title=Exodus+Gods+and+Kings
+https://www.3donlinefilms.com/player.php?title=The+Matrix+Reloaded
+https://www.3donlinefilms.com/player.php?title=28+Years+Later:+The+Bone+Temple
+https://www.3donlinefilms.com/player.php?title=Batman+v+Superman+Dawn+of+Justice
+https://www.3donlinefilms.com/player.php?title=The+Suicide+Squad
+https://www.3donlinefilms.com/player.php?title=Teenage+Mutant+Ninja+Turtles+Out+of+the+Shadows
+https://www.3donlinefilms.com/player.php?title=Ghost+in+the+Shell+1995
+https://www.3donlinefilms.com/player.php?title=The+Young+and+Prodigious+T.S.+Spivet
+https://www.3donlinefilms.com/player.php?title=The+Wolwerine
+https://www.3donlinefilms.com/player.php?title=The+Rise+of+Skywalker
+https://www.3donlinefilms.com/player.php?title=Memento
+https://www.3donlinefilms.com/player.php?title=The+Finest+Hours
+https://www.3donlinefilms.com/player.php?title=The+Fifth+Element
+https://www.3donlinefilms.com/player.php?title=A+Wrinkle+in+Time
+https://www.3donlinefilms.com/player.php?title=Battle+of+the+Year
+https://www.3donlinefilms.com/player.php?title=Smurfs
+https://www.3donlinefilms.com/player.php?title=Akira
+https://www.3donlinefilms.com/player.php?title=Assassins+Creed
+https://www.3donlinefilms.com/player.php?title=The+Departed
+https://www.3donlinefilms.com/player.php?title=The+Dark+Crystal
+https://www.3donlinefilms.com/player.php?title=Final+Destination+5
+https://www.3donlinefilms.com/player.php?title=Annihilation
+https://www.3donlinefilms.com/player.php?title=Dungeons+and+Dragons:+Honor+Among+Thieves
+https://www.3donlinefilms.com/player.php?title=Reservoir+Dogs
+https://www.3donlinefilms.com/player.php?title=Guardians+of+the+Galaxy-2
+https://www.3donlinefilms.com/player.php?title=Halls+of+Stone
+https://www.3donlinefilms.com/player.php?title=Ghost+in+the+Shell
+https://www.3donlinefilms.com/player.php?title=Oppenheimer
+https://www.3donlinefilms.com/player.php?title=Prometheus
+https://www.3donlinefilms.com/player.php?title=The+Eagle+and+the+Sceptre
+https://www.3donlinefilms.com/player.php?title=Ice+Age+Dawn+of+the+Dinosaurs
+https://www.3donlinefilms.com/player.php?title=Insurgent
+https://www.3donlinefilms.com/player.php?title=Hansel+and+Gretel+Witch+Hunters
+https://www.3donlinefilms.com/player.php?title=Resident+Evil+Extinction
+https://www.3donlinefilms.com/player.php?title=The+Legend+of+Hercules
+https://www.3donlinefilms.com/player.php?title=Solo:+A+Star+Wars+Story
+https://www.3donlinefilms.com/player.php?title=Fantastic+Beasts+The+Crimes+of+Grindelwald
+https://www.3donlinefilms.com/player.php?title=The+Amazing+SpiderMan+2
+https://www.3donlinefilms.com/player.php?title=Kingdom+of+the+Planet+of+the+Apes
+https://www.3donlinefilms.com/player.php?title=Hercules+the+Demigod
+https://www.3donlinefilms.com/player.php?title=Space+Jam:+A+New+Legacy
+https://www.3donlinefilms.com/player.php?title=The+Lion+King1994
+https://www.3donlinefilms.com/player.php?title=Beauty+and+the+Beast
+https://www.3donlinefilms.com/player.php?title=Upgrade
+https://www.3donlinefilms.com/player.php?title=The+Boy+and+the+Heron
+https://www.3donlinefilms.com/player.php?title=Batman
+https://www.3donlinefilms.com/player.php?title=In+the+Heart+of+the+Sea
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+III+Revenge+of+the+Sith
+https://www.3donlinefilms.com/player.php?title=Bolt
+https://www.3donlinefilms.com/player.php?title=A+Minecraft+Movie
+https://www.3donlinefilms.com/player.php?title=Pirates+of+the+Caribbean+On+Stranger+Tides
+https://www.3donlinefilms.com/player.php?title=Aladdin
+https://www.3donlinefilms.com/player.php?title=How+to+Train+Your+Dragon
+https://www.3donlinefilms.com/player.php?title=That+Christmas
+https://www.3donlinefilms.com/player.php?title=Scream+VI
+https://www.3donlinefilms.com/player.php?title=Shrek2
+https://www.3donlinefilms.com/player.php?title=Fantastic+Beasts:+The+Secrets+of+Dumbledore
+https://www.3donlinefilms.com/player.php?title=Battle+for+Terra
+https://www.3donlinefilms.com/player.php?title=A+Christmas+Carol
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+II+Attack+of+the+Clones
+https://www.3donlinefilms.com/player.php?title=Zack+Snyders+Justice+League
+https://www.3donlinefilms.com/player.php?title=San+Andreas
+https://www.3donlinefilms.com/player.php?title=Godzilla+King+of+the+Monsters
+https://www.3donlinefilms.com/player.php?title=I+Frankenstein
+https://www.3donlinefilms.com/player.php?title=The+Emperor+New+Groove
+https://www.3donlinefilms.com/player.php?title=Pompeii
+https://www.3donlinefilms.com/player.php?title=Wrath+of+the+Titans
+https://www.3donlinefilms.com/player.php?title=Dolittle
+https://www.3donlinefilms.com/player.php?title=Gemini-Man
+https://www.3donlinefilms.com/player.php?title=Top+Gun
+https://www.3donlinefilms.com/player.php?title=Pacific+Rim
+https://www.3donlinefilms.com/player.php?title=Star+Trek+Beyond
+https://www.3donlinefilms.com/player.php?title=HotelTransylvania
+https://www.3donlinefilms.com/player.php?title=Rogue+One+A+Star+Wars+Story
+https://www.3donlinefilms.com/player.php?title=Drive
+https://www.3donlinefilms.com/player.php?title=The+Martian
+https://www.3donlinefilms.com/player.php?title=Starship+Troopers
+https://www.3donlinefilms.com/player.php?title=Godzilla+Minus+One
+https://www.3donlinefilms.com/player.php?title=Gods+of+Egypt
+https://www.3donlinefilms.com/player.php?title=WorldWarZ
+https://www.3donlinefilms.com/player.php?title=Hugo
+https://www.3donlinefilms.com/player.php?title=Jungle+Cruise
+https://www.3donlinefilms.com/player.php?title=The+Nightmare+Before+Christmas
+https://www.3donlinefilms.com/player.php?title=SuicideSquad
+https://www.3donlinefilms.com/player.php?title=Percy+Jackson+Sea+of+Monsters
+https://www.3donlinefilms.com/player.php?title=Dune
+https://www.3donlinefilms.com/player.php?title=Minions
+https://www.3donlinefilms.com/player.php?title=Arthur+Christmas
+https://www.3donlinefilms.com/player.php?title=Saving+Private+Ryan
+https://www.3donlinefilms.com/player.php?title=The+Little+Prince
+https://www.3donlinefilms.com/player.php?title=Stalingrad
+https://www.3donlinefilms.com/player.php?title=The+Peanuts+Movie
+https://www.3donlinefilms.com/player.php?title=Pacific+Rim+Uprising
+https://www.3donlinefilms.com/player.php?title=Spy+Kids+3D:+Game+Over
+https://www.3donlinefilms.com/player.php?title=Step+Up+All+In
+https://www.3donlinefilms.com/player.php?title=Free+Guy
+https://www.3donlinefilms.com/player.php?title=How+To+Train+Your+Dragon+2
+https://www.3donlinefilms.com/player.php?title=Corpse+Bride
+https://www.3donlinefilms.com/player.php?title=Geostorm
+https://www.3donlinefilms.com/player.php?title=The+Darkest+Hour
+https://www.3donlinefilms.com/player.php?title=The+Lord+of+the+Rings:+The+Return+of+the+King
+https://www.3donlinefilms.com/player.php?title=Pixels
+https://www.3donlinefilms.com/player.php?title=The+Chronicles+of+Narnia:+The+Lion+the+Witch+and+the+Wardrobe
+https://www.3donlinefilms.com/player.php?title=Interstellar
+https://www.3donlinefilms.com/player.php?title=Blade+Runner2049
+https://www.3donlinefilms.com/player.php?title=The+Croods+A+New+Age
+https://www.3donlinefilms.com/player.php?title=Mission+Impossible+The+Final+Reckoning+Part+Two
+https://www.3donlinefilms.com/player.php?title=Mortal
+https://www.3donlinefilms.com/player.php?title=Predator:+Badlands
+https://www.3donlinefilms.com/player.php?title=The+Little+Mermaid
+https://www.3donlinefilms.com/player.php?title=The+Secret+Life+of+Pets
+https://www.3donlinefilms.com/player.php?title=Frozen
+https://www.3donlinefilms.com/player.php?title=Godzilla
+https://www.3donlinefilms.com/player.php?title=Where+Is+He
+https://www.3donlinefilms.com/player.php?title=Teenage+Mutant+Ninja+Turtles
+https://www.3donlinefilms.com/player.php?title=300
+https://www.3donlinefilms.com/player.php?title=Finding+Nemo
+https://www.3donlinefilms.com/player.php?title=Miss+Peregrine+Home+for+Peculiar+Children
+https://www.3donlinefilms.com/player.php?title=Bridge+to+Terabithia
+https://www.3donlinefilms.com/player.php?title=How+to+Train+Your+Dragon+2025
+https://www.3donlinefilms.com/player.php?title=Immortals
+https://www.3donlinefilms.com/player.php?title=Nobody+
+https://www.3donlinefilms.com/player.php?title=Scrooge+A+Christmas+Carol
+https://www.3donlinefilms.com/player.php?title=The+Gentlemen
+https://www.3donlinefilms.com/player.php?title=Valerian+and+the+City+of+a+Thousand+Planets
+https://www.3donlinefilms.com/player.php?title=47+Ronin
+https://www.3donlinefilms.com/player.php?title=The+Amazing+Spider-Man
+https://www.3donlinefilms.com/player.php?title=The+Mummy
+https://www.3donlinefilms.com/player.php?title=Fantasia
+https://www.3donlinefilms.com/player.php?title=Ultraman:+Rising
+https://www.3donlinefilms.com/player.php?title=The+Flash
+https://www.3donlinefilms.com/player.php?title=The+Hole
+https://www.3donlinefilms.com/player.php?title=A+Bug+Life
+https://www.3donlinefilms.com/player.php?title=Texas+Chainsaw+3D
+https://www.3donlinefilms.com/player.php?title=Talk+to+me
+https://www.3donlinefilms.com/player.php?title=Monster+Hunter
+https://www.3donlinefilms.com/player.php?title=Dark+City
+https://www.3donlinefilms.com/player.php?title=Shrek
+https://www.3donlinefilms.com/player.php?title=Kong:+Skull+Island
+https://www.3donlinefilms.com/player.php?title=The+Final+Destination
+https://www.3donlinefilms.com/player.php?title=How+to+Train+Your+Dragon+The+Hidden+World
+https://www.3donlinefilms.com/player.php?title=Elf
+https://www.3donlinefilms.com/player.php?title=Tad+and+the+Secret+of+King+Midas
+https://www.3donlinefilms.com/player.php?title=The+lego+batman+movie
+https://www.3donlinefilms.com/player.php?title=Fight+Club
+https://www.3donlinefilms.com/player.php?title=The+Great+Gatsby
+https://www.3donlinefilms.com/player.php?title=Wonder+Woman
+https://www.3donlinefilms.com/player.php?title=Jurassic+World:+Dominion
+https://www.3donlinefilms.com/player.php?title=King+Kong
+https://www.3donlinefilms.com/player.php?title=Skyscraper
+https://www.3donlinefilms.com/player.php?title=Smallfoot
+https://www.3donlinefilms.com/player.php?title=Battle+Los+Angeles
+https://www.3donlinefilms.com/player.php?title=eXistenZ
+https://www.3donlinefilms.com/player.php?title=JurassicWorld+Fallen+Kingdom
+https://www.3donlinefilms.com/player.php?title=Star+Wars+The+Force+Awakens
+https://www.3donlinefilms.com/player.php?title=xXx+Return+of+Xander+Cage
+https://www.3donlinefilms.com/player.php?title=Team+America+World+Police
+https://www.3donlinefilms.com/player.php?title=Beauty+and+the+Beast+1991
+https://www.3donlinefilms.com/player.php?title=The+Matrix+Resurrections
+https://www.3donlinefilms.com/player.php?title=Smurfs:+The+Lost+Village
+https://www.3donlinefilms.com/player.php?title=Finding+Dory
+https://www.3donlinefilms.com/player.php?title=The+Three+Musketeers
+https://www.3donlinefilms.com/player.php?title=The+Hobbit+The+Battle+of+the+Five+Armies
+https://www.3donlinefilms.com/player.php?title=Stranger+Things:+The+Rightside+Up
+https://www.3donlinefilms.com/player.php?title=The+Bad+Guys
+https://www.3donlinefilms.com/player.php?title=Universal+Soldier+Day+of+Reckoning
+https://www.3donlinefilms.com/player.php?title=Snow+White+and+the+Seven+Dwarfs
+https://www.3donlinefilms.com/player.php?title=The+SpongeBob+Movie
+https://www.3donlinefilms.com/player.php?title=Minority+Report
+https://www.3donlinefilms.com/player.php?title=Total+Recall+2012
+https://www.3donlinefilms.com/player.php?title=The+Hunger+Games+Mockingjay+Part+2
+https://www.3donlinefilms.com/player.php?title=Transformers+One
+https://www.3donlinefilms.com/player.php?title=Legend+of+the+Guardians
+https://www.3donlinefilms.com/player.php?title=Zombieland:+Double+Tap
+https://www.3donlinefilms.com/player.php?title=Spider-Man+Homecoming
+https://www.3donlinefilms.com/player.php?title=Memoir+of+a+Snail
+https://www.3donlinefilms.com/player.php?title=Star+Wars+Episode+VI+Return+of+the+Jedi
+https://www.3donlinefilms.com/player.php?title=The+Snow+Queen+2
+https://www.3donlinefilms.com/player.php?title=The+Great+Wave
+https://www.3donlinefilms.com/player.php?title=The+Last+Jedi
+https://www.3donlinefilms.com/player.php?title=The+Exorcist
+https://www.3donlinefilms.com/player.php?title=Ghostbusters
+https://www.3donlinefilms.com/player.php?title=Zootopia
+https://www.3donlinefilms.com/player.php?title=The+BFG
+https://www.3donlinefilms.com/player.php?title=Fast+Furious+Presents+Hobbs+Shaw
+https://www.3donlinefilms.com/player.php?title=Dredd
+https://www.3donlinefilms.com/player.php?title=Brave
+https://www.3donlinefilms.com/player.php?title=Troy
+https://www.3donlinefilms.com/player.php?title=Charlie+and+the+Chocolate+Factory
+https://www.3donlinefilms.com/player.php?title=Aliens+Extended+Edition
+https://www.3donlinefilms.com/player.php?title=The+Legend+of+Tarzan
+https://www.3donlinefilms.com/player.php?title=The+Lego+Movie2
+https://www.3donlinefilms.com/player.php?title=Trolls+Band+Together
+https://www.3donlinefilms.com/player.php?title=ResidentEvil+Retribution
+https://www.3donlinefilms.com/player.php?title=Monster+House
+https://www.3donlinefilms.com/player.php?title=Bad+Santa
+https://www.3donlinefilms.com/player.php?title=The+Flying+Machine
+https://www.3donlinefilms.com/player.php?title=Oz+the+Great+and+Powerfulhttps://www.3donlinefilms.com/player.php?title=Pulp+Fiction
+https://www.3donlinefilms.com/player.php?title=Send+Help
+https://www.3donlinefilms.com/player.php?title=Man+of+Steel
+https://www.3donlinefilms.com/player.php?title=Iron+Mask
+https://www.3donlinefilms.com/player.php?title=Lichtmond+3+Days+of+Eternity
+https://www.3donlinefilms.com/player.php?title=Everest
+https://www.3donlinefilms.com/player.php?title=The+Lost+World:+Jurassic+Park
+
+
+================================================================================
+FILE: G:\My Drive\Official Data\Divyansh\3D Online Script\allmoviegetjson.py
+================================================================================
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import json
+import os
+from bs4 import BeautifulSoup
+import requests
+
+# --- CONFIGURATION ---
+INPUT_FILE = "all3dmovies.txt"
+OUTPUT_FILE = "output.json"
+MAX_WORKERS = 50  # Number of parallel pages to fetch at once
+
+# Load URLs from text file safely
+if os.path.exists(INPUT_FILE):
+    with open(INPUT_FILE, "r", encoding="utf-8") as f:
+        URLS = [line.strip() for line in f if line.strip().startswith("http")]
+else:
+    print(f"[❌] Error: '{INPUT_FILE}' not found.")
+    URLS = []
+
+
+def scrape_single_url(url):
+    """Worker task that handles fetching and parsing a single URL."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        if response.status_code != 200:
+            return None
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        # 1. Extract the inner text from class="art-content"
+        art_content_div = soup.select_one(".art-content")
+        art_text = ""
+        if art_content_div:
+            # get_text strips tags and normalizes white spaces cleanly
+            art_text = art_content_div.get_text(separator=" ", strip=True)
+
+        # 2. Extract the application/ld+json metadata
+        json_ld_tags = soup.find_all("script", type="application/ld+json")
+        for tag in json_ld_tags:
+            try:
+                data = json.loads(tag.string)
+                if isinstance(data, dict) and data.get("@type") == "VideoObject":
+                    # Package both elements together into a single record object
+                    return {
+                        "metadata": data,
+                        "art_content_text": art_text
+                    }
+            except (json.JSONDecodeError, TypeError):
+                continue
+                
+        # Fallback: If no metadata was found but art-content exists, you can still return it
+        if art_text:
+            return {
+                "metadata": {},
+                "art_content_text": art_text
+            }
+            
+    except Exception as e:
+        # Silently absorb network drops or timeouts per thread
+        pass
+    return None
+
+
+def main():
+    if not URLS:
+        print("[❌] No valid URLs to process. Exiting.")
+        return
+
+    all_metadata = []
+    total_urls = len(URLS)
+
+    print(
+        f"[~] Spinning up ThreadPoolExecutor with {MAX_WORKERS} workers for {total_urls} URLs..."
+    )
+
+    # Execute requests in parallel threads
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        # Submit all parsing tasks to the thread pool tracker
+        future_to_url = {
+            executor.submit(scrape_single_url, url): url for url in URLS
+        }
+
+        # Handle completed tasks on the fly
+        completed_count = 0
+        for future in as_completed(future_to_url):
+            url = future_to_url[future]
+            completed_count += 1
+            try:
+                result = future.result()
+                if result:
+                    all_metadata.append(result)
+                    # Safely fetch name for terminal print logs
+                    movie_name = result.get("metadata", {}).get("name") or "Unknown Movie"
+                    print(
+                        f"[{completed_count}/{total_urls}] ✅ Extracted: {movie_name}"
+                    )
+                else:
+                    print(
+                        f"[{completed_count}/{total_urls}] ⚠️ Failed/Skipped: {url}"
+                    )
+            except Exception as exc:
+                print(f"[{completed_count}/{total_urls}] ❌ Generated error: {exc}")
+
+    # Write collected array to your output file
+    print(f"\n[💾] Writing {len(all_metadata)} items to {OUTPUT_FILE}...")
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+        json.dump(all_metadata, f, indent=4, ensure_ascii=False)
+
+    print("🎉 Complete!")
+
+
+if __name__ == "__main__":
+    main()
+
+================================================================================
+FILE: G:\My Drive\Official Data\Divyansh\3D Online Script\allMovies.json
+================================================================================
+
+[
+    {
+        "metadata": {
+            "@context": "https://schema.org",
+            "@type": "VideoObject",
+            "@id": "https://www.3donlinefilms.com/video/Mortal+Kombat/#video",
+            "url": "https://www.3donlinefilms.com/video/Mortal+Kombat/",
+            "name": "Mortal Kombat",
+            "description": "Marked since birth and hunted by forces he doesn’t understand, a hardened MMA fighter is suddenly pulled into a hidden war that spans realms beyond imagination. As deadly…",
+            "inLanguage": "en",
+            "thumbnailUrl": "https://www.3donlinefilms.com/Thumbs/Mortal.Kombat.jpg",
+            "uploadDate": "2026-05-08T04:47:53Z",
+            "embedUrl": "https://www.3donlinefilms.com/video/Mortal+Kombat/",
+            "publisher": {
+                "@type": "Organization",
+                "name": "3D online Films",
+                "logo": {
+                    "@type": "ImageObject",
+                    "url": "https://www.3donlinefilms.com/Favicons/Logo2.png",
+                    "width": 120,
+                    "height": 120
+                }
+            },
+            "duration": "PT1H39M20S",
+            "interactionStatistic": {
+                "@type": "InteractionCounter",
+                "interactionType": {
+                    "@type": "WatchAction"
+                },
+                "userInteractionCount": 17754
+            }
+        },
+        "art_content_text": "Mortal Kombat (2021)       1:39:20      17754 Views Marked since birth and hunted by forces he doesn’t understand, a hardened MMA fighter is suddenly pulled into a hidden war that spans realms beyond imagination. As deadly warriors from another world close in, he is forced to protect his family while uncovering the truth behind his mysterious lineage. Guided by elite soldiers and ancient guardians, he finds refuge among Earth’s greatest champions, where brutal training and relentless battles push him to his limits. Facing legendary fighters with supernatural abilities, he must awaken a power buried deep within his soul—because the fate of his world depends on whether he can rise before it’s too late. Enhanced with a powerful 2D to 3D conversion, every fight hits with greater depth and impact. Blows feel closer, energy attacks burst out of the screen, and the arena environments gain a new sense of scale and intensity. The action becomes more immersive and visceral, placing you right in the center of every brutal clash. Related Searches: Action , Fantasy , Adventure , Martial Arts , Video games , 2D to 3D Series: Mortal Kombat"
+    },
+    {
+        "metadata": {
+            "@context": "https://schema.org",
+            "@type": "VideoObject",
+            "@id": "https://www.3donlinefilms.com/video/Project+Hail+Mary/#video",
+            "url": "https://www.3donlinefilms.com/video/Project+Hail+Mary/",
+            "name": "Project Hail Mary",
+            "description": "A man awakens alone aboard a spaceship, light-years from Earth, with no memory of who he is or how he arrived there. As fragments of his past begin to return, he uncovers a…",
+            "inLanguage": "en",
+            "thumbnailUrl": "https://www.3donlinefilms.com/Thumbs/Project.Hail.Mary.jpg",
+            "uploadDate": "2026-04-24T05:51:20Z",
+            "embedUrl": "https://www.3donlinefilms.com/video/Project+Hail+Mary/",
+            "publisher": {
+                "@type": "Organization",
+                "name": "3D online Films",
+                "logo": {
+                    "@type": "ImageObject",
+                    "url": "https://www.3donlinefilms.com/Favicons/Logo2.png",
+                    "width": 120,
+                    "height": 120
+                }
+            },
+            "duration": "PT2H31M20S",
+            "interactionStatistic": {
+                "@type": "InteractionCounter",
+                "interactionType": {
+                    "@type": "WatchAction"
+                },
+                "userInteractionCount": 26387
+            }
+        },
+        "art_content_text": "Project Hail Mary (2026)       2:31:20      26387 Views A man awakens alone aboard a spaceship, light-years from Earth, with no memory of who he is or how he arrived there. As fragments of his past begin to return, he uncovers a desperate mission: to solve a cosmic mystery threatening to extinguish the sun and wipe out all life on Earth. With time running out, he must rely on his scientific ingenuity and unconventional thinking to piece together the truth. But as the scale of the crisis becomes clear, an unexpected connection changes everything—offering hope in the most unlikely of circumstances and redefining what it means to survive against impossible odds. Enhanced with a powerful 2D to 3D conversion, the vastness of space, the intricate technology of the ship, and the intensity of each discovery gain striking depth and scale. Every moment feels more immersive, drawing you deeper into this high-stakes journey across the cosmos. Related Searches: Sci-Fi , Adventure , Thriller , Space , Alien , 2D to 3D"
+    },
+    {
+        "metadata": {
+            "@context": "https://schema.org",
+            "@type": "VideoObject",
+            "@id": "https://www.3donlinefilms.com/video/The+Marvels/#video",
+            "url": "https://www.3donlinefilms.com/video/The+Marvels/",
+            "name": "The Marvels",
+            "description": "Carol Danvers, aka Captain Marvel, has regained the identity taken from her by the tyrannical Kree and exacted her revenge on the Supreme Intelligence. But a series of unforeseen…",
+            "inLanguage": "en",
+            "thumbnailUrl": "https://www.3donlinefilms.com/Thumbs/The.Marvels.jpg",
+            "uploadDate": "2024-04-02T11:20:02Z",
+            "embedUrl": "https://www.3donlinefilms.com/video/The+Marvels/",
+            "publisher": {
+                "@type": "Organization",
+                "name": "3D online Films",
+                "logo": {
+                    "@type": "ImageObject",
+                    "url": "https://www.3donlinefilms.com/Favicons/Logo2.png",
+                    "width": 120,
+                    "height": 120
+                }
+            },
+            "duration": "PT1H33M17S",
+            "interactionStatistic": {
+                "@type": "InteractionCounter",
+                "interactionType": {
+                    "@type": "WatchAction"
+                },
+                "userInteractionCount": 44568
+            }
+        },
+        "art_content_text": "The Marvels (2023)       1:33:17      44568 Views Carol Danvers, aka Captain Marvel, has regained the identity taken from her by the tyrannical Kree and exacted her revenge on the Supreme Intelligence. But a series of unforeseen consequences force her to bear the weight of a destabilized universe. When duty leads her to an anomalous wormhole linked to a Kree revolutionary, her powers connect with those of her New Jersey superfan Kamala Khan, aka Ms. Marvel, and her estranged niece, now an astronaut at S.A.B.E.R., Captain Monica Rambeau. Together, the members of this unlikely trio will have to join forces and learn to work as a team as The Marvels to save the universe. Join them on this exhilarating ride that promises not just action-packed sequences but a heartwarming exploration of connections that transcend time and space. Don't miss out on the chance to experience the thrill, the emotion, and the spectacle in 3D adventure event that will leave you breathless. Related Searches: Sci-Fi , Action , Fantasy , Adventure , Comedy , Superheroes , Marvel , Blu-ray"
+    }, ... so on
+]
+
+================================================================================
+FILE: G:\My Drive\Official Data\Divyansh\3D Online Script\google_ids\a.py
+================================================================================
+
+# lsf gdrive:/3DMovies --include "*.mp4" --format "pi" --files-only > 3d_video_ids.txt
+
+
+import json
+
+with open("initData.json", "r") as f:
+    data = json.load(f)
+
+with open("ids.txt", "r") as f:
+    ids = [f.strip() for f in f.readlines()]
+
+
+video_ids = []
+for id in ids:
+    name, video_id = id.split(";")
+    video_ids.append({"name": name, "id": video_id})
+
+for i in range(len(data)):
+    name = data[i]["metadata"]["name"].split(".mp4")[0]
+    for video in video_ids:
+        if name == video["name"].split(".mp4")[0]:
+            data[i]["gdrive_id"] = video["id"]
+            break
+
+with open("finalData.json", "w") as f:
+    json.dump(data, f, indent=4)

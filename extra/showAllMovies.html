@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Films Metadata Hub</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+
+    <header class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
+        <div
+            class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div
+                    class="h-10 w-10 rounded-xl bg-amber-500 flex items-center justify-center font-bold text-slate-950 text-xl shadow-lg shadow-amber-500/20">
+                    3D
+                </div>
+                <div>
+                    <h1
+                        class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+                        Film Discovery Dashboard
+                    </h1>
+                    <p class="text-xs text-slate-400">Search & Filter Collected Library Metadata</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3 w-full sm:w-auto">
+                <div class="relative w-full sm:w-72">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                        <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                    <input type="text" id="searchInput" placeholder="Search film texts..."
+                        class="w-full bg-slate-950 text-slate-100 pl-10 pr-4 py-2 rounded-xl border border-slate-700 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all placeholder-slate-500 text-sm">
+                </div>
+
+                <button id="copyJsonBtn"
+                    class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition-all text-amber-400 cursor-pointer whitespace-nowrap shadow-sm">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                    <span>Copy JSON</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-6 flex items-center justify-between">
+            <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold" id="resultsCount">
+                Showing all items
+            </span>
+        </div>
+
+        <div id="moviesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-6">
+        </div>
+
+        <div id="noResults" class="hidden text-center py-20">
+            <svg class="mx-auto h-12 w-12 text-slate-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M7 4v16M17 4v16M3 8h18M3 16h18" />
+            </svg>
+            <h3 class="text-lg font-medium text-slate-300">No matching movies found</h3>
+            <p class="text-sm text-slate-500 mt-1">Try adjusting your search query keywords.</p>
+        </div>
+    </main>
+
+    <script>
+        const moviesGrid = document.getElementById('moviesGrid');
+        const searchInput = document.getElementById('searchInput');
+        const noResults = document.getElementById('noResults');
+        const resultsCount = document.getElementById('resultsCount');
+        const copyJsonBtn = document.getElementById('copyJsonBtn');
+
+        // Global variable holding parsed text records
+        let moviesData = [];
+
+        // Helper function to clean ISO 8601 strings (e.g. PT1H39M20S -> 1h 39m 20s)
+        function formatDuration(isoString) {
+            if (!isoString) return 'N/A';
+            return isoString
+                .replace('PT', '')
+                .replace('H', 'h ')
+                .replace('M', 'm ')
+                .replace('S', 's')
+                .toLowerCase();
+        }
+
+        // Helper function to format ISO dates cleanly
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        // Remove item from data stack completely and update display
+        function removeMovie(url) {
+            moviesData = moviesData.filter(movie => movie.metadata?.url !== url);
+            triggerSearchFilter();
+        }
+
+        // Consolidated logic to manage rendering based on user's current filter criteria
+        function triggerSearchFilter() {
+            const query = searchInput.value.toLowerCase().trim();
+            const filtered = moviesData.filter(movie => {
+                const targetText = movie.art_content_text ? movie.art_content_text.toLowerCase() : "";
+                return targetText.includes(query);
+            });
+
+            // Sort filtered results alphabetically by name before rendering
+            filtered.sort((a, b) => {
+                const nameA = a.metadata?.name || "";
+                const nameB = b.metadata?.name || "";
+                return nameA.localeCompare(nameB);
+            });
+            renderMovies(filtered);
+        }
+
+        // Display rendering controller loop logic
+        function renderMovies(movies) {
+            moviesGrid.innerHTML = '';
+
+            // Handle display counts updates dynamically
+            resultsCount.textContent = `Showing ${movies.length} of ${moviesData.length} items`;
+
+            if (movies.length === 0) {
+                moviesGrid.classList.add('hidden');
+                noResults.classList.remove('hidden');
+                return;
+            }
+
+            moviesGrid.classList.remove('hidden');
+            noResults.classList.add('hidden');
+
+            movies.forEach(movie => {
+                // Accessing variables safely from nested metadata block layout
+                const meta = movie.metadata || {};
+                const name = meta.name || "Unknown Title";
+                const thumbnailUrl = meta.thumbnailUrl || "";
+                const duration = meta.duration || "";
+                const inLanguage = meta.inLanguage || "en";
+                const uploadDate = meta.uploadDate || "";
+                const playerUrl = meta.url || "#";
+                const views = meta.interactionStatistic?.userInteractionCount?.toLocaleString() || 0;
+
+                // Using art_content_text block as the card description element fallback
+                const displayDescription = movie.art_content_text || meta.description || "";
+
+                const card = document.createElement('div');
+                card.className = "relative bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl hover:border-slate-700/80 transition-all group flex flex-col h-full";
+
+                card.innerHTML = `
+                    <button 
+                        onclick="removeMovie('${playerUrl}')" 
+                        class="absolute top-3 right-3 z-30 h-7 w-7 rounded-full bg-slate-950/80 backdrop-blur-md text-slate-400 hover:text-red-400 border border-slate-800 flex items-center justify-center font-bold text-base transition-colors shadow-md cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        title="Remove item"
+                    >
+                        &times;
+                    </button>
+
+                    <div class="w-full h-auto bg-slate-950 overflow-hidden">
+                        <img 
+                            src="${thumbnailUrl}" 
+                            alt="${name}"
+                            class="w-full h-auto object-contain group-hover:scale-[1.02] transition-transform duration-300"
+                            onerror="this.src='https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=600&auto=format&fit=crop'"
+                        >
+                    </div>
+
+                    <div class="absolute inset-0 flex flex-col justify-between p-5 bg-gradient-to-t from-slate-950 via-slate-950/70 to-slate-950/20 opacity-95 group-hover:opacity-100 transition-opacity">
+                        
+                        <div class="flex justify-between items-start w-full pr-6">
+                            <div class="bg-slate-950/80 backdrop-blur-md px-2 py-0.5 rounded text-[10px] tracking-wide uppercase font-semibold text-slate-300 border border-slate-800">
+                                ${inLanguage}
+                            </div>
+                            <div class="bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-md text-xs font-medium text-amber-400 border border-slate-800">
+                                ${formatDuration(duration)}
+                            </div>
+                        </div>
+
+                        <div class="mt-auto space-y-2">
+                            <div class="text-[11px] text-slate-400 font-medium">
+                                Added: ${formatDate(uploadDate)}
+                            </div>
+                            
+                            <h2 class="text-lg font-bold text-white group-hover:text-amber-400 transition-colors tracking-tight line-clamp-1">
+                                ${name}
+                            </h2>
+                            
+                            <p class="text-slate-300 text-xs leading-relaxed line-clamp-3">
+                                ${displayDescription}
+                            </p>
+
+                            <div class="pt-3 mt-1 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
+                                <span class="flex items-center gap-1.5 drop-shadow-sm">
+                                    <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    ${views} views
+                                </span>
+                                
+                                <a 
+                                    href="${playerUrl}" 
+                                    target="_blank" 
+                                    class="inline-flex items-center gap-1 font-semibold text-amber-400 hover:text-amber-300 transition-colors drop-shadow-sm"
+                                >
+                                    Open Player
+                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 00-2 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                    </svg>
+                                </a>
+                            </div>
+                        </div>
+
+                    </div>
+                `;
+                moviesGrid.appendChild(card);
+            });
+        }
+
+        // Active filter listener - strictly queries the "art_content_text" property
+        searchInput.addEventListener('input', triggerSearchFilter);
+
+        // Copy button workflow handler
+        copyJsonBtn.addEventListener('click', async () => {
+            try {
+                const jsonString = JSON.stringify(moviesData, null, 2);
+                await navigator.clipboard.writeText(jsonString);
+
+                // Visual response indicating execution success
+                const innerSpan = copyJsonBtn.querySelector('span');
+                const defaultText = innerSpan.textContent;
+                innerSpan.textContent = 'Copied!';
+                copyJsonBtn.classList.add('text-emerald-400');
+
+                setTimeout(() => {
+                    innerSpan.textContent = defaultText;
+                    copyJsonBtn.classList.remove('text-emerald-400');
+                }, 2000);
+            } catch (err) {
+                console.error('Could not copy JSON data text framework: ', err);
+                alert('Failed to copy JSON schema data structure.');
+            }
+        });
+
+        // Asynchronous Initialization routine fetching external json file
+        async function initializeApp() {
+            try {
+                resultsCount.textContent = "Loading library data...";
+                const response = await fetch('filteredMovies.json');
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                moviesData = await response.json();
+
+                // Initial baseline alphabetical sorting strategy
+                moviesData.sort((a, b) => {
+                    const nameA = a.metadata?.name || "";
+                    const nameB = b.metadata?.name || "";
+                    return nameA.localeCompare(nameB);
+                });
+
+                renderMovies(moviesData);
+            } catch (error) {
+                console.error("Failed to load movies data:", error);
+                resultsCount.textContent = "❌ Error loading allMovies.json";
+                moviesGrid.innerHTML = `
+                    <div class="col-span-full text-center py-10 text-red-400 bg-red-950/20 border border-red-900/50 rounded-xl">
+                        Failed to fetch or parse library file. Ensure <strong>allMovies.json</strong> is in the same directory and served through a local web server.
+                    </div>`;
+            }
+        }
+
+        // Kickoff application setup
+        initializeApp();
+    </script>
+</body>
+
+</html>
