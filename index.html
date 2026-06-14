@@ -27,10 +27,10 @@
     class="text-zinc-200 min-h-screen selection:bg-amber-500/30 selection:text-amber-200 flex flex-col justify-between overflow-x-hidden">
     <div>
         <header
-            class="border-b border-zinc-900 bg-[#0d0d0d]/80 backdrop-blur-xl sticky top-0 z-50 px-4 sm:px-6 lg:px-8">
+            class="border-b border-zinc-900 bg-[#0d0d0d]/80 backdrop-blur-xl sticky top-0 z-50 px-4 sm:px-6 lg:px-8 w-full">
             <div
                 class="max-w-7xl mx-auto py-5 sm:py-6 flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
-                <div class="flex items-center gap-4 text-center sm:text-left">
+                <a href="index.html" class="flex items-center gap-4 text-center sm:text-left">
                     <div
                         class="h-12 w-12 rounded-xl bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700 flex items-center justify-center font-bold text-black text-xl shadow-2xl shadow-amber-500/10 tracking-tighter luxury-heading">
                         MB
@@ -44,7 +44,7 @@
                             Curated by Divyansh
                         </p>
                     </div>
-                </div>
+                </a>
                 <div class="flex items-center gap-3 w-full sm:w-auto">
                     <div class="relative w-full sm:w-80 group">
                         <div
@@ -112,14 +112,14 @@
         function triggerSearchFilter() {
             const query = searchInput.value.toLowerCase().trim();
             const filtered = moviesData.filter((movie) => {
-                const targetText = movie.art_content_text
-                    ? movie.art_content_text.toLowerCase()
+                const targetText = movie.context
+                    ? movie.context.toLowerCase()
                     : "";
                 return targetText.includes(query);
             });
             filtered.sort((a, b) => {
-                const nameA = a.metadata?.name || "";
-                const nameB = b.metadata?.name || "";
+                const nameA = a?.name || "";
+                const nameB = b?.name || "";
                 return nameA.localeCompare(nameB);
             });
             renderMovies(filtered);
@@ -135,11 +135,10 @@
             moviesGrid.classList.remove("hidden");
             noResults.classList.add("hidden");
             movies.forEach((movie) => {
-                const meta = movie.metadata || {};
-                const name = meta.name || "Untitled Production";
-                const thumbnailUrl = meta.thumbnailUrl || "";
-                const duration = meta.duration || "";
-                const displayDescription = meta.description || "";
+                const name = movie.name || "Untitled Production";
+                const thumbnailUrl = movie.thumbnailUrl || "";
+                const duration = movie.duration || "";
+                const displayDescription = movie.description || "";
                 const card = document.createElement("a");
                 card.href = `player.html?title=${encodeURIComponent(name)}`;
                 card.className =
@@ -182,8 +181,8 @@
                 if (!response.ok) throw new Error(`Status: ${response.status}`);
                 moviesData = await response.json();
                 moviesData.sort((a, b) => {
-                    const nameA = a.metadata?.name || "";
-                    const nameB = b.metadata?.name || "";
+                    const nameA = a?.name || "";
+                    const nameB = b?.name || "";
                     return nameA.localeCompare(nameB);
                 });
                 renderMovies(moviesData);
