@@ -1,0 +1,85 @@
+PS C:\Users\divya\Downloads\3D-Online-Script> & C:\Users\divya\AppData\Local\Python\pythoncore-3.14-64\python.exe c:/Users/divya/Downloads/3D-Online-Script/main/a.py
+[~] Crawling home pages for new movies...
+
+🚀 Found 5 new video paths to process.
+  - The Dark Knight
+  - Captain EO
+  - Michael Jackson: Thriller
+  - Iron Mask
+  - The Lost World: Jurassic Park
+
+============================================================
+🎬 Processing Film [1/5]: The Dark Knight
+============================================================
+[🔐] Logging in to refresh session...
+🔍 Stream URL found: https://www.3donlinefilms.com/play.php?f=The.Dark.Knight.TV.mp4&expires=1781970538&sig=c97f19a686b77026166e4946541e6805b69845537d65f68d47244150ae757979
+📄 Extracted Page Data: {"url": "https://www.3donlinefilms.com/video/The+Dark+Knight/", "name": "The Dark Knight", "description": "A masked vigilante joins forces with an idealistic district attorney and a determined police lieutenant to wage war against the criminal underworld threatening their city. Their\u2026", "thumbnailUrl": "https://www.3donlinefilms.com/Thumbs/The.Dark.Knight.jpg", "duration": "PT2H25M10S", "context": "The Dark Knight (2008) \u00a0 \u00a0\u00a0\u00a0 2:25:10  \u00a0 \u00a0 765 Views A masked vigilante joins forces with an idealistic district attorney and a determined police lieutenant to wage war against the criminal underworld threatening their city. Their efforts begin to restore hope, but everything changes when a brilliant and ruthless anarchist emerges, unleashing a campaign of terror that pushes the city to the brink of collapse. As chaos spreads and impossible choices arise, the battle between justice and madness becomes a gripping test of courage, morality, and sacrifice. The 2D-to-3D conversion intensifies the film\u2019s spectacular action and cinematic scale. High-speed chases, towering cityscapes, explosive set pieces, and the dark atmosphere of Gotham gain impressive depth and immersion, making this epic superhero thriller even more powerful and visually engaging in 3D. Related Searches: Action , Thriller , Crime , Superheroes , DC Comics , Cult movie , 2D to 3D Series: Batman"}
+📁 Local file path: C:\Users\divya\Downloads\3Dmovies_temp\The Dark Knight.mp4                                                    
+[📤] Uploading via rclone to -> gdrive:3DMovies/The Dark Knight.mp4
+✅ Upload successful!
+[🔗] Fetching Drive ID via rclone link...
+🆔 Extracted Drive ID: 13hzFTQl1GicJa_psOoNavVQdwWef2e_J
+Upload and ID retrieval result: Success
+🗑️ Local temp file removed: C:\Users\divya\Downloads\3Dmovies_temp\The Dark Knight.mp4
+💾 finalData.json updated completely for: The Dark Knight
+
+============================================================
+🎬 Processing Film [2/5]: Captain EO
+============================================================
+[🔐] Logging in to refresh session...
+🔍 Stream URL found: https://www.3donlinefilms.com/play.php?f=Captain.EO.TV.mp4&expires=1781971907&sig=137824bf42093a6b04bdf5d4ea1a71b3c5ae85f7c1b6dc5e09420052621bc271
+📄 Extracted Page Data: {"url": "https://www.3donlinefilms.com/video/Captain+EO/", "name": "Captain EO", "description": "A fearless space captain and his eccentric crew embark on a daring mission to a dark and desolate world ruled by a powerful tyrant. Armed not with weapons but with the\u2026", "thumbnailUrl": "https://www.3donlinefilms.com/Thumbs/Captain.EO.jpg", "duration": "PT16M13S", "context": "Captain EO (1986) \u00a0 \u00a0\u00a0\u00a0 00:16:13  \u00a0 \u00a0 2512 Views A fearless space captain and his eccentric crew embark on a daring mission to a dark and desolate world ruled by a powerful tyrant. Armed not with weapons but with the transformative power of music, imagination, and hope, they confront strange creatures, mechanical armies, and overwhelming odds in a visually spectacular journey through the stars. As the battle between darkness and light unfolds, a simple gift becomes the key to unlocking beauty, freedom, and an extraordinary change that could save an entire world. Inspired by the creative talents of Michael Jackson, George Lucas, and Francis Ford Coppola, this short sci-fi musical adventure blends fantasy, space opera, dazzling choreography, and groundbreaking visual effects into a unique cinematic experience. The 2D-to-3D conversion enhances the film\u2019s futuristic visuals with impressive depth and immersion. Spaceships, laser effects, alien worlds, and musical sequences feel more dynamic and spectacular, making this unique sci-fi adventure even more engaging in 3D. Related Searches: Sci-Fi , Musical , Adventure , Fantasy , Family , Michael Jackson , 2D to 3D"}
+📁 Local file path: C:\Users\divya\Downloads\3Dmovies_temp\Captain EO.mp4                                                         
+[📤] Uploading via rclone to -> gdrive:3DMovies/Captain EO.mp4
+✅ Upload successful!
+[🔗] Fetching Drive ID via rclone link...
+🆔 Extracted Drive ID: 1u1o35LAa76xsUCAaOFxtcwxrGwE4d8Wc
+Upload and ID retrieval result: Success
+🗑️ Local temp file removed: C:\Users\divya\Downloads\3Dmovies_temp\Captain EO.mp4
+💾 finalData.json updated completely for: Captain EO
+
+============================================================
+🎬 Processing Film [3/5]: Michael Jackson: Thriller
+============================================================
+[🔐] Logging in to refresh session...
+🔍 Stream URL found: https://www.3donlinefilms.com/play.php?f=Michael.Jackson.Thriller.TV.mp4&expires=1781972199&sig=2f501f442a92b7e38bfd7b90d88169142cb745cbbe464eb7d14dec8fb5b93c34
+📄 Extracted Page Data: {"url": "https://www.3donlinefilms.com/video/Michael+Jackson:+Thriller/", "name": "Michael Jackson: Thriller", "description": "What begins as an ordinary evening quickly descends into a chilling nightmare when a young couple finds themselves surrounded by mysterious creatures lurking in the darkness. As\u2026", "thumbnailUrl": "https://www.3donlinefilms.com/Thumbs/Michael.Jackson.Thriller.jpg", "duration": "PT12M20S", "context": "Michael Jackson: Thriller (1983) \u00a0 \u00a0\u00a0\u00a0 00:12:20  \u00a0 \u00a0 2196 Views What begins as an ordinary evening quickly descends into a chilling nightmare when a young couple finds themselves surrounded by mysterious creatures lurking in the darkness. As fear spreads through deserted streets and the dead begin to rise from their graves, reality blurs with fantasy in a haunting tale filled with suspense, unforgettable imagery, and one of the most iconic performances in music history. Combining horror, mystery, and groundbreaking cinematic storytelling, this legendary short film transformed the music video format forever. The 2D-to-3D conversion adds striking depth to the eerie graveyard scenes, advancing zombies, and atmospheric night settings. The famous dance sequences, cinematic camera movements, and horror effects feel more immersive and dynamic, making this timeless classic even more spectacular to experience in 3D. Related Searches: Horror , Musical , Zombies , Supernatural , Michael Jackson , Clip , 2D to 3D"}
+📁 Local file path: C:\Users\divya\Downloads\3Dmovies_temp\Michael Jackson: Thriller.mp4                                          
+[📤] Uploading via rclone to -> gdrive:3DMovies/Michael Jackson: Thriller.mp4
+❌ Rclone copy operations failed:
+2026/06/20 15:49:00 NOTICE: Failed to copyto: directory not found
+
+Upload and ID retrieval result: Failed
+🗑️ Local temp file removed: C:\Users\divya\Downloads\3Dmovies_temp\Michael Jackson: Thriller.mp4
+
+============================================================
+🎬 Processing Film [4/5]: Iron Mask
+============================================================
+[🔐] Logging in to refresh session...
+🔍 Stream URL found: https://www.3donlinefilms.com/play.php?f=Iron.Mask.TV.mp4&expires=1781972342&sig=33d4e7f90681ca8b33d125bc557c71fc0a6987890953c0ee188162030a72b3ce
+📄 Extracted Page Data: {"url": "https://www.3donlinefilms.com/video/Iron+Mask/", "name": "Iron Mask", "description": "English traveller Jonathan Green receives from Peter the Great an order to map the Russian Far East. Once again he sets out for a long journey full of incredible adventures that\u2026", "thumbnailUrl": "https://www.3donlinefilms.com/Thumbs/Iron.Mask.jpg", "duration": "PT1H54M11S", "context": "Iron Mask (2019) \u00a0 \u00a0\u00a0\u00a0 1:54:11  \u00a0 \u00a0 10081 Views English traveller Jonathan Green receives from Peter the Great an order to map the Russian Far East. Once again he sets out for a long journey full of incredible adventures that will eventually lead him to China. The cartographer will unexpectedly face a lot of breathtaking discoveries, encounter bizarre creatures, meet with Chinese Princesses, and confront deadly martial arts masters, and even the King of all dragons, the Dragon King. What could be more dangerous than meeting eye-to-eye with Viy, except doing it again? What would be stronger this time, a staunch skepticism of the scientist or the old black magic that has seized power of Eastern lands? Related Searches: Adventure , Fantasy , Action , China , Dragon , Blu-ray"}
+📁 Local file path: C:\Users\divya\Downloads\3Dmovies_temp\Iron Mask.mp4                                                          
+[📤] Uploading via rclone to -> gdrive:3DMovies/Iron Mask.mp4
+✅ Upload successful!
+[🔗] Fetching Drive ID via rclone link...
+🆔 Extracted Drive ID: 1GixXgr6wHKqLoc5V2EhDUbM1IEbc8W6A
+Upload and ID retrieval result: Success
+🗑️ Local temp file removed: C:\Users\divya\Downloads\3Dmovies_temp\Iron Mask.mp4
+💾 finalData.json updated completely for: Iron Mask
+
+============================================================
+🎬 Processing Film [5/5]: The Lost World: Jurassic Park
+============================================================
+[🔐] Logging in to refresh session...
+🔍 Stream URL found: https://www.3donlinefilms.com/play.php?f=The.Lost.World.Jurassic.Park.TV.mp4&expires=1781974368&sig=d72f9de2fae78cca584a26e694054191a07c32eff7e49230ec087e76771c2bf6
+📄 Extracted Page Data: {"url": "https://www.3donlinefilms.com/video/The+Lost+World:+Jurassic+Park/", "name": "The Lost World: Jurassic Park", "description": "As a research team ventures to an island just eighty-seven miles from the legendary Jurassic Park, they uncover a world where dinosaurs roam free once more. But the excitement\u2026", "thumbnailUrl": "https://www.3donlinefilms.com/Thumbs/The.Lost.World.Jurassic.Park.jpg", "duration": "PT2H2M", "context": "The Lost World: Jurassic Park (1997) \u00a0 \u00a0\u00a0\u00a0 02:02:00  \u00a0 \u00a0 6667 Views As a research team ventures to an island just eighty-seven miles from the legendary Jurassic Park, they uncover a world where dinosaurs roam free once more. But the excitement doesn't end there. InGen, the BioEngineering giant, has its own plans for these prehistoric creatures, sending a larger team to capture them for a new park in San Diego. As the two teams clash amidst the towering dinosaurs, a battle for survival ensues. Will they triumph and return with their groundbreaking discoveries? Or will the island's untamed nature spell out another tragic fate? Embark on an exhilarating journey to an island teeming with ancient wonders in our exclusive 2D to 3D conversion of this thrilling adventure! Prepare for heart-stopping action, jaw-dropping visuals in this unforgettable cinematic experience! VR glasses version available. Related Searches: Adventure , Action , Sci-Fi , Horror , Dinosaurs , Blu-ray Series: Jurassic World"}
+📁 Local file path: C:\Users\divya\Downloads\3Dmovies_temp\The Lost World: Jurassic Park.mp4                                      
+[📤] Uploading via rclone to -> gdrive:3DMovies/The Lost World: Jurassic Park.mp4
+❌ Rclone copy operations failed:
+2026/06/20 16:40:36 NOTICE: Failed to copyto: directory not found
+
+Upload and ID retrieval result: Failed
+🗑️ Local temp file removed: C:\Users\divya\Downloads\3Dmovies_temp\The Lost World: Jurassic Park.mp4
+
+🏁 Integration cycle completed successfully!
+PS C:\Users\divya\Downloads\3D-Online-Script> 

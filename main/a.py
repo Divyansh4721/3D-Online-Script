@@ -13,8 +13,8 @@ EMAIL = "divyanshbansal4224@gmail.com"
 BASE_URL = "https://www.3donlinefilms.com"
 SEARCH_URL_MAIN = "https://www.3donlinefilms.com/home"
 LOGIN_URL = "https://www.3donlinefilms.com/login.php"
-FINAL_JSON_FILE = "zNew/finalData.json"
-BLACKLIST_FILE = "zNew/blacklist.json"
+FINAL_JSON_FILE = "main/finalData.json"
+BLACKLIST_FILE = "main/blacklist.json"
 TEMP_DOWNLOAD_DIR = r"C:\Users\divya\Downloads\3Dmovies_temp"
 RCLONE_REMOTE_NAME = "gdrive"
 RCLONE_FOLDER_PATH = "3DMovies"
@@ -47,9 +47,7 @@ def upload_and_get_id(local_filepath, filename):
             print(f"⚠️ Could not extract ID from rclone link result: {link}")
             return None
     except subprocess.CalledProcessError as e:
-        print(
-            f"⚠️ Rclone link failed (Folder or file may not be publicly linkable yet): {e.stderr}"
-        )
+        print(f"⚠️ Rclone link failed: {e.stderr}")
         return None
 
 
@@ -117,14 +115,17 @@ async def sniff_stream_url(context, url):
 
     page.on("request", on_request)
     try:
+        print("[🔐] Logging in to refresh session...")
+        await login(page)
         asyncio.create_task(page.goto(url, wait_until="commit"))
         try:
-            found_url = await asyncio.wait_for(media_found_future, timeout=15)
-            return found_url
+            found_url = await asyncio.wait_for(media_found_future, timeout=20)
+            cookies = await context.cookies()
+            return found_url, cookies
         except asyncio.TimeoutError:
-            return None
+            return None, None
     except Exception:
-        return None
+        return None, None
     finally:
         await page.close()
 
@@ -170,6 +171,8 @@ def extract_page_data(url):
 def download_file(url, filename, session_cookies):
     os.makedirs(TEMP_DOWNLOAD_DIR, exist_ok=True)
     full_save_path = os.path.join(TEMP_DOWNLOAD_DIR, filename)
+    if os.path.exists(full_save_path):
+        return full_save_path
     cookies_dict = {c["name"]: c["value"] for c in session_cookies}
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -232,21 +235,19 @@ async def main():
         print(f"  - {movie['title']}")
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context()
-        login_page = await context.new_page()
-        print("[🔐] Authorizing connection state...")
-        await login(login_page)
-        await login_page.close()
-        session_cookies = await context.cookies()
         for idx, item in enumerate(new_movies, 1):
             print(f"\n" + "=" * 60)
             print(f"🎬 Processing Film [{idx}/{len(new_movies)}]: {item['title']}")
             print("=" * 60)
-            stream_url = await sniff_stream_url(context, item["player_url"])
-            if not stream_url:
+            context = await browser.new_context()
+            stream_url, session_cookies = await sniff_stream_url(
+                context, item["player_url"]
+            )
+            if not stream_url or not session_cookies:
                 print(
-                    f"⚠️ Timeout: Could not find valid network token for {item['title']}. Skipping."
+                    f"⚠️ Timeout/Auth Fail: Could not find valid network token for {item['title']}. Skipping."
                 )
+                await context.close()
                 continue
             print(f"🔍 Stream URL found: {stream_url}")
             page_data = extract_page_data(item["player_url"])
@@ -257,32 +258,34 @@ async def main():
             print(
                 f"📁 Local file path: {local_filepath if local_filepath else 'Download failed'}"
             )
-            if local_filepath and os.path.exists(local_filepath):
-                drive_id = upload_and_get_id(local_filepath, item["title"] + ".mp4")
-                print(
-                    f"Upload and ID retrieval result: {'Success' if drive_id else 'Failed'}"
-                )
-                try:
-                    print(f"🗑️ Local temp file removed: {local_filepath}")
-                except OSError:
-                    pass
-                if drive_id:
-                    new_clean_record = {
-                        "player_url": item["player_url"],
-                        "url": page_data["url"],
-                        "name": (
-                            page_data["name"] if page_data["name"] else item["title"]
-                        ),
-                        "description": page_data["description"],
-                        "thumbnailUrl": page_data["thumbnailUrl"],
-                        "duration": page_data["duration"],
-                        "context": page_data["context"],
-                        "gdrive_id": drive_id,
-                    }
-                    master_json_data.append(new_clean_record)
-                    with open(FINAL_JSON_FILE, "w", encoding="utf-8") as f:
-                        json.dump(master_json_data, f, indent=4, ensure_ascii=False)
-                    print(f"💾 finalData.json updated completely for: {item['title']}")
+            await context.close()
+            # if local_filepath and os.path.exists(local_filepath):
+            #     drive_id = upload_and_get_id(local_filepath, item["title"] + ".mp4")
+            #     print(
+            #         f"Upload and ID retrieval result: {'Success' if drive_id else 'Failed'}"
+            #     )
+            #     try:
+            #         # os.remove(local_filepath)
+            #         print(f"🗑️ Local temp file removed: {local_filepath}")
+            #     except OSError:
+            #         pass
+            #     if drive_id:
+            #         new_clean_record = {
+            #             "player_url": item["player_url"],
+            #             "url": page_data["url"],
+            #             "name": (
+            #                 page_data["name"] if page_data["name"] else item["title"]
+            #             ),
+            #             "description": page_data["description"],
+            #             "thumbnailUrl": page_data["thumbnailUrl"],
+            #             "duration": page_data["duration"],
+            #             "context": page_data["context"],
+            #             "gdrive_id": drive_id,
+            #         }
+            #         master_json_data.append(new_clean_record)
+            #         with open(FINAL_JSON_FILE, "w", encoding="utf-8") as f:
+            #             json.dump(master_json_data, f, indent=4, ensure_ascii=False)
+            #         print(f"💾 finalData.json updated completely for: {item['title']}")
         await browser.close()
     print("\n🏁 Integration cycle completed successfully!")
 
